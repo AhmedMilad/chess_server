@@ -18,6 +18,7 @@ var Upgrader = websocket.Upgrader{
 type Message struct {
 	GameID int             `json:"game_id"`
 	Type   string          `json:"type"`
+	Color  string          `json:"color"`
 	Data   json.RawMessage `json:"data"`
 	Board  string          `json:"board"`
 	Turn   int             `json:"turn"`
@@ -119,86 +120,42 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 			fmt.Println("Game not found:", err)
 			continue
 		}
-		var moveData struct {
-			From string `json:"from"`
-			To   string `json:"to"`
+		var moveError error
+		switch message.Type {
+		case "move":
+			moveError = handleMove(game, &message) //TODO accept the piece color to validate the moves
+		case "long_castle":
+			moveError = handleLongCastle(game, message.Color, &message)
+		case "king_side_castle":
+			moveError = handleKingSideCastle(game, message.Color, &message)
+		case "enpassent":
+			moveError = handleEnpassent(game, message.Color, &message)
+		default:
+			fmt.Println("Unhandled move type")
 		}
-		if message.Type == "move" {
-			if err := json.Unmarshal(message.Data, &moveData); err != nil {
-				fmt.Println("Error unmarshaling move data:", err)
-				return
-			}
 
-			var moves []string
-			if len(game.Moves) > 0 {
-				if err := json.Unmarshal(game.Moves, &moves); err != nil {
-					fmt.Println("Failed to unmarshal moves:", err)
-					moves = []string{}
-				}
-			}
-			moves = append(moves, moveData.To)
-			newMoves, _ := json.Marshal(moves)
-			game.Moves = newMoves
-			board, err := GetBoardFromFenNotation(game.Board)
+		if moveError != nil {
+			fmt.Println("Invalid Move Error: ", moveError)
+			continue
+		}
 
-			if err != nil {
-				fmt.Println("Invalid board notation:", err)
-				return
-			}
-
-			fmt.Println(moveData)
-
-			fromIndex, err := getMoveNotationIndex(moveData.From)
-			if err != nil {
-				fmt.Println("Invalid move from:", err)
-				return
-			}
-
-			toIndex, err := getMoveNotationIndex(moveData.To)
-			if err != nil {
-				fmt.Println("Invalid move to:", err)
-				return
-			}
-
-			currentSquare := board[(*fromIndex)[0]][(*fromIndex)[1]]
-			board[(*fromIndex)[0]][(*fromIndex)[1]] = " "
-			board[(*toIndex)[0]][(*toIndex)[1]] = currentSquare
-
-			newBoardNotation, err := GetFenNotation(*board)
-			if err != nil {
-				fmt.Println("Invalid board notation:", err)
-				return
-			}
-
-			game.Board = *newBoardNotation
-			if game.PlayerTurn == 1 {
-				game.PlayerTurn = 2
-			} else {
-				game.PlayerTurn = 1
-			}
-			if err := db.DB.Save(&game).Error; err != nil {
-				fmt.Println("Failed to save move:", err)
-			}
-			var opponentID uint
-			if game.Player1ID == playerId {
-				opponentID = game.Player2ID
-			} else if game.Player2ID == playerId {
-				opponentID = game.Player1ID
-			} else {
-				fmt.Println("Player not part of this game")
-				continue
-			}
-			message.Board = *newBoardNotation
-			message.Turn = game.PlayerTurn
-			msg, err = json.Marshal(message)
-			if err != nil {
-				fmt.Println("Invalid message")
-			}
-			if opponentWS, ok := Players[opponentID]; ok {
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					opponentWS.Close()
-					delete(Players, opponentID)
-				}
+		msg, err = json.Marshal(message)
+		if err != nil {
+			fmt.Println("Invalid message")
+		}
+		var opponentID uint
+		if game.Player1ID == playerId {
+			opponentID = game.Player2ID
+		} else if game.Player2ID == playerId {
+			opponentID = game.Player1ID
+		} else {
+			fmt.Println("Player not part of this game")
+			continue
+		}
+		if opponentWS, ok := Players[opponentID]; ok {
+			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+				opponentWS.Close()
+				delete(Players, opponentID)
 			}
 		}
 

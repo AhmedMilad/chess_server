@@ -5,7 +5,9 @@ import (
 	"chess_server/models"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"slices"
 	"strconv"
@@ -318,6 +320,204 @@ func GetBoardFromFenNotation(fenNotation string) (*[8][8]string, error) {
 	return &board, nil
 }
 
+func handleMove(game models.Game, message *Message) error {
+	var moveData struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := json.Unmarshal(message.Data, &moveData); err != nil {
+		return errors.New("Error unmarshaling move data")
+	}
+
+	var moves []string
+	if len(game.Moves) > 0 {
+		if err := json.Unmarshal(game.Moves, &moves); err != nil {
+			fmt.Println("Failed to unmarshal moves:", err)
+			moves = []string{}
+		}
+	}
+	moves = append(moves, moveData.To)
+	newMoves, _ := json.Marshal(moves)
+	game.Moves = newMoves
+	board, err := GetBoardFromFenNotation(game.Board)
+
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	fromIndex, err := getMoveNotationIndex(moveData.From)
+	if err != nil {
+		return errors.New("Invalid move from")
+	}
+
+	toIndex, err := getMoveNotationIndex(moveData.To)
+	if err != nil {
+		return errors.New("Invalid move to")
+	}
+
+	currentSquare := board[(*fromIndex)[0]][(*fromIndex)[1]]
+	board[(*fromIndex)[0]][(*fromIndex)[1]] = " "
+	board[(*toIndex)[0]][(*toIndex)[1]] = currentSquare
+
+	newBoardNotation, err := GetFenNotation(*board)
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	game.Board = *newBoardNotation
+	if game.PlayerTurn == 1 {
+		game.PlayerTurn = 2
+	} else {
+		game.PlayerTurn = 1
+	}
+	if err := db.DB.Save(&game).Error; err != nil {
+		fmt.Println("Failed to save move:", err)
+	}
+	message.Board = *newBoardNotation
+	message.Turn = game.PlayerTurn
+
+	return nil
+}
+
+func handleKingSideCastle(game models.Game, pieceColor string, message *Message) error {
+
+	board, err := GetBoardFromFenNotation(game.Board)
+
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	if pieceColor == "w" {
+		if board[7][4] == "K" && board[7][7] == "R" { //TODO validate if any is moved before
+			ok := true
+			for st := 4; st <= 7; st++ {
+				ok = ok && getDiagonalThreat(7, st, pieceColor, *board)
+				ok = ok && getAntiDiagonalThreat(7, st, pieceColor, *board)
+				ok = ok && getFileThreat(7, st, pieceColor, *board)
+				ok = ok && getRowThreat(7, st, pieceColor, *board)
+				ok = ok && getKnightThreat(7, st, pieceColor, *board)
+				ok = ok && getPawnThreat(7, st, pieceColor, *board)
+				ok = ok && getKingThreat(7, st, pieceColor, *board)
+			}
+
+			if !ok {
+				return errors.New("Invalid Move")
+			}
+			swap(7, 4, 7, 6, board)
+			swap(7, 7, 7, 5, board)
+		}
+	} else {
+		if board[0][4] == "k" && board[0][7] == "r" { //TODO validate if any is moved before
+			ok := true
+			for st := 4; st <= 7; st++ {
+				ok = ok && getDiagonalThreat(0, st, pieceColor, *board)
+				ok = ok && getAntiDiagonalThreat(0, st, pieceColor, *board)
+				ok = ok && getFileThreat(0, st, pieceColor, *board)
+				ok = ok && getRowThreat(0, st, pieceColor, *board)
+				ok = ok && getKnightThreat(0, st, pieceColor, *board)
+				ok = ok && getPawnThreat(0, st, pieceColor, *board)
+				ok = ok && getKingThreat(0, st, pieceColor, *board)
+			}
+
+			if !ok {
+				return errors.New("Invalid Move")
+			}
+			swap(0, 4, 0, 6, board)
+			swap(0, 7, 0, 5, board)
+		}
+	}
+
+	newBoardNotation, err := GetFenNotation(*board)
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	game.Board = *newBoardNotation
+	if game.PlayerTurn == 1 {
+		game.PlayerTurn = 2
+	} else {
+		game.PlayerTurn = 1
+	}
+	if err := db.DB.Save(&game).Error; err != nil {
+		fmt.Println("Failed to save move:", err)
+	}
+	message.Board = *newBoardNotation
+	message.Turn = game.PlayerTurn
+
+	return nil
+}
+
+func handleLongCastle(game models.Game, pieceColor string, message *Message) error {
+	board, err := GetBoardFromFenNotation(game.Board)
+
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	if pieceColor == "w" {
+		if board[7][4] == "K" && board[7][0] == "R" { //TODO validate if any is moved before
+			ok := true
+			for st := 4; st >= 0; st-- {
+				ok = ok && getDiagonalThreat(7, st, pieceColor, *board)
+				ok = ok && getAntiDiagonalThreat(7, st, pieceColor, *board)
+				ok = ok && getFileThreat(7, st, pieceColor, *board)
+				ok = ok && getRowThreat(7, st, pieceColor, *board)
+				ok = ok && getKnightThreat(7, st, pieceColor, *board)
+				ok = ok && getPawnThreat(7, st, pieceColor, *board)
+				ok = ok && getKingThreat(7, st, pieceColor, *board)
+			}
+
+			if !ok {
+				return errors.New("Invalid Move")
+			}
+			swap(7, 4, 7, 2, board)
+			swap(7, 0, 7, 3, board)
+		}
+	} else {
+		if board[0][4] == "k" && board[0][7] == "r" { //TODO validate if any is moved before
+			ok := true
+			for st := 4; st >= 0; st-- {
+				ok = ok && getDiagonalThreat(0, st, pieceColor, *board)
+				ok = ok && getAntiDiagonalThreat(0, st, pieceColor, *board)
+				ok = ok && getFileThreat(0, st, pieceColor, *board)
+				ok = ok && getRowThreat(0, st, pieceColor, *board)
+				ok = ok && getKnightThreat(0, st, pieceColor, *board)
+				ok = ok && getPawnThreat(0, st, pieceColor, *board)
+				ok = ok && getKingThreat(0, st, pieceColor, *board)
+			}
+
+			if !ok {
+				return errors.New("Invalid Move")
+			}
+			swap(0, 4, 0, 2, board)
+			swap(0, 0, 0, 3, board)
+		}
+	}
+
+	newBoardNotation, err := GetFenNotation(*board)
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	game.Board = *newBoardNotation
+	if game.PlayerTurn == 1 {
+		game.PlayerTurn = 2
+	} else {
+		game.PlayerTurn = 1
+	}
+	if err := db.DB.Save(&game).Error; err != nil {
+		fmt.Println("Failed to save move:", err)
+	}
+	message.Board = *newBoardNotation
+	message.Turn = game.PlayerTurn
+
+	return nil
+}
+
+func handleEnpassent(game models.Game, pieceColor string, message *Message) error {
+	return nil
+}
+
 func getMoveNotationIndex(moveNotation string) (*[2]int, error) {
 	if len(moveNotation) < 2 {
 		return nil, fmt.Errorf("invalid move notation: %s", moveNotation)
@@ -339,4 +539,235 @@ func getMoveNotationIndex(moveNotation string) (*[2]int, error) {
 	row := 8 - rowDigit
 
 	return &[2]int{row, col}, nil
+}
+
+func getDiagonalThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+	targetPieces := []string{"b", "q"}
+	if color == "b" {
+		targetPieces = []string{"B", "Q"}
+	}
+
+	curStRow := stRow
+	curStCol := stCol
+
+	for math.Max(float64(curStRow), float64(curStCol)) <= 7 {
+		boardPiece := board[curStRow][curStCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStCol++
+		curStRow++
+	}
+
+	curStRow = stRow
+	curStCol = stCol
+
+	for math.Min(float64(curStRow), float64(curStCol)) >= 0 {
+		boardPiece := board[curStRow][curStCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStCol--
+		curStRow--
+	}
+
+	return true
+}
+
+func getAntiDiagonalThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+	targetPieces := []string{"b", "q"}
+	if color == "b" {
+		targetPieces = []string{"B", "Q"}
+	}
+
+	curStRow := stRow
+	curStCol := stCol
+
+	for curStCol >= 0 && curStRow <= 7 {
+		boardPiece := board[curStRow][curStCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStCol--
+		curStRow++
+	}
+
+	curStRow = stRow
+	curStCol = stCol
+
+	for curStRow >= 0 && curStCol <= 7 {
+		boardPiece := board[curStRow][curStCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStCol++
+		curStRow--
+	}
+
+	return true
+}
+
+func getFileThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+	targetPieces := []string{"r", "q"}
+	if color == "b" {
+		targetPieces = []string{"R", "Q"}
+	}
+
+	curStRow := stRow
+
+	for curStRow <= 7 {
+		boardPiece := board[curStRow][stCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStRow++
+	}
+
+	curStRow = stRow
+
+	for curStRow >= 0 {
+		boardPiece := board[curStRow][stCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStRow--
+	}
+
+	return true
+}
+
+func getRowThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+	targetPieces := []string{"r", "k", "q"}
+	if color == "b" {
+		targetPieces = []string{"R", "K", "Q"}
+	}
+
+	curStCol := stCol
+
+	for curStCol <= 7 {
+		boardPiece := board[stRow][curStCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStCol++
+	}
+
+	curStCol = stCol
+
+	for curStCol >= 0 {
+		boardPiece := board[stRow][curStCol]
+		if boardPiece != "" {
+			if slices.Contains(targetPieces, boardPiece) {
+				return false
+			} else {
+				return true
+			}
+		}
+		curStCol--
+	}
+
+	return true
+}
+
+func getKnightThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+	targetPiece := "n"
+	if color == "b" {
+		targetPiece = "N"
+	}
+	moves := [][]int{{2, 1}, {2, -1}, {-2, 1}, {-2, -1}, {1, 2}, {1, -2}, {-1, 2}, {-1, -2}}
+	for _, move := range moves {
+		row := stRow + move[0]
+		col := stCol + move[1]
+		if math.Min(float64(row), float64(col)) < 0 || math.Max(float64(row), float64(col)) > 7 {
+			continue
+		}
+		if board[row][col] == targetPiece {
+			return false
+		}
+	}
+	return true
+}
+func getPawnThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+
+	if color == "w" {
+		if stRow-1 >= 0 && stCol-1 >= 0 {
+			if board[stRow-1][stCol-1] == "p" {
+				return false
+			}
+		}
+
+		if stRow-1 >= 0 && stCol+1 <= 7 {
+			if board[stRow-1][stCol+1] == "p" {
+				return false
+			}
+		}
+
+	} else {
+		if stRow+1 <= 7 && stCol-1 >= 0 {
+			if board[stRow+1][stCol-1] == "P" {
+				return false
+			}
+		}
+
+		if stRow+1 <= 7 && stCol+1 <= 7 {
+			if board[stRow+1][stCol+1] == "P" {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func getKingThreat(stRow int, stCol int, color string, board [8][8]string) bool {
+	targetPiece := "k"
+	if color == "b" {
+		targetPiece = "K"
+	}
+	moves := [][]int{{1, 1}, {1, -1}, {-1, 1}, {-1, -1}, {0, 1}, {0, -1}, {-1, 0}, {1, 0}}
+	for _, move := range moves {
+		row := stRow + move[0]
+		col := stCol + move[1]
+		if math.Min(float64(row), float64(col)) < 0 || math.Max(float64(row), float64(col)) > 7 {
+			continue
+		}
+		if board[row][col] == targetPiece {
+			return false
+		}
+	}
+	return true
+}
+
+func swap(stRow int, stCol int, tRow int, tCol int, board *[8][8]string) {
+	temp := board[stRow][stCol]
+	board[stRow][stCol] = board[tRow][tCol]
+	board[tRow][tCol] = temp
 }
