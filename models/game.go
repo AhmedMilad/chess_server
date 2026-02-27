@@ -16,6 +16,8 @@ type Game struct {
 	Status         string         `gorm:"type:varchar(50);default:'pending'"`
 	WinnerID       *uint          `gorm:"default:null"`
 	Moves          datatypes.JSON `gorm:"type:json"`
+	Board          string         `gorm:"size:255"`
+	PlayerTurn     int            `gorm:"check:player_turn IN (1,2)"`
 	PointsAwarded  int            `gorm:"default:0"`
 	PointsDeducted int            `gorm:"default:0"`
 	CreatedAt      time.Time

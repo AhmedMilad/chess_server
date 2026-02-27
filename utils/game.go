@@ -6,19 +6,36 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
-	"math/rand"
-	"time"
 )
 
 var Ctx context.Context
+var Board [8][8]string = [8][8]string{
+	{"r", "n", "b", "q", "k", "b", "n", "r"},
+	{"p", "p", "p", "p", "p", "p", "p", "p"},
+	{" ", " ", " ", " ", " ", " ", " ", " "},
+	{" ", " ", " ", " ", " ", " ", " ", " "},
+	{" ", " ", " ", " ", " ", " ", " ", " "},
+	{" ", " ", " ", " ", " ", " ", " ", " "},
+	{"P", "P", "P", "P", "P", "P", "P", "P"},
+	{"R", "N", "B", "Q", "K", "B", "N", "R"},
+}
 
 type NotificationMessage struct {
 	Type     string `json:"type"`
 	GameId   int    `json:"game_id"`
 	Opponent Player `json:"opponent"`
 	IsBlack  bool   `json:"is_black"`
+	Board    string `json:"board"`
+	Turn     int    `json:"turn"`
 }
 
 func InitGame() {
@@ -26,30 +43,46 @@ func InitGame() {
 }
 
 func createGame(p1, p2 Player) {
+	boardNotation, _ := GetFenNotation(Board)
+	turn := rand.Intn(2)
 	game := models.Game{
 		Player1ID:  p1.UserID,
 		Player2ID:  p2.UserID,
 		GameTypeID: p1.GameTypeID,
 		Status:     "ongoing",
+		Board:      *boardNotation,
+		PlayerTurn: 1,
+	}
+	if turn == 1 {
+		temp := game.Player1ID
+		game.Player1ID = game.Player2ID
+		game.Player2ID = temp
+		tempPlayer := p1
+		p1 = p2
+		p2 = tempPlayer
 	}
 	db.DB.Create(&game)
-	turn := rand.Intn(2)
-	isBlack := true
-	if turn == 1 {
-		isBlack = false
-	}
 	startGame := "start_game"
+	boardNotation, err := GetFenNotation(Board)
+	if err != nil {
+		Players[p1.UserID].Close()
+		delete(Players, p1.UserID)
+	}
 	player1Notification := NotificationMessage{
 		Type:     startGame,
 		GameId:   int(game.ID),
 		Opponent: p2,
-		IsBlack:  isBlack,
+		IsBlack:  false,
+		Board:    *boardNotation,
+		Turn:     game.PlayerTurn,
 	}
 	player2Notification := NotificationMessage{
 		Type:     startGame,
 		GameId:   int(game.ID),
 		Opponent: p1,
-		IsBlack:  !isBlack,
+		IsBlack:  true,
+		Board:    *boardNotation,
+		Turn:     game.PlayerTurn,
 	}
 	player1Data, _ := json.Marshal(&player1Notification)
 	player2Data, _ := json.Marshal(&player2Notification)
@@ -208,4 +241,102 @@ func MatchPlayer(playerRaw string) bool {
 	}
 
 	return true
+}
+
+func GetFenNotation(board [8][8]string) (*string, error) {
+	fen := ""
+	if len(board) != 8 {
+		return nil, fmt.Errorf("invalid board: expected 8 rows, got %d", len(board))
+	}
+	for i, row := range board {
+		if len(row) != 8 {
+			return nil, fmt.Errorf("invalid board: expected 8 rows, got %d", len(board))
+		}
+		cnt := 0
+		for _, elem := range row {
+			if elem == "" || elem == " " {
+				cnt++
+				continue
+			}
+			if !slices.Contains([]string{"p", "r", "n", "b", "q", "k"}, strings.ToLower(elem)) {
+				return nil, fmt.Errorf("invalid board piece name")
+			}
+			var emptySquares = ""
+			if cnt > 0 {
+				emptySquares = strconv.Itoa(cnt)
+				cnt = 0
+			}
+			fen = fen + emptySquares + elem
+		}
+		if cnt > 0 {
+			fen = fen + strconv.Itoa(cnt)
+		}
+		if i < 7 {
+			fen = fen + "/"
+		}
+	}
+	return &fen, nil
+}
+
+func GetBoardFromFenNotation(fenNotation string) (*[8][8]string, error) {
+	var board [8][8]string
+	row, col := 0, 0
+	validPieces := []string{"p", "r", "n", "b", "q", "k", "P", "R", "N", "B", "Q", "K"}
+	for _, elem := range fenNotation {
+		if unicode.IsDigit(elem) {
+			count := int(elem - '0')
+			for i := 0; i < count; i++ {
+				if row >= 8 || col >= 8 {
+					return nil, fmt.Errorf("too many squares")
+				}
+				board[row][col] = " "
+				col++
+			}
+		} else if elem == '/' {
+			if col != 8 {
+				return nil, fmt.Errorf("row %d has %d columns, expected 8", row+1, col)
+			}
+			row++
+			col = 0
+			if row >= 8 {
+				return nil, fmt.Errorf("too many rows")
+			}
+		} else {
+			if !slices.Contains(validPieces, string(elem)) {
+				return nil, fmt.Errorf("invalid piece: %s", string(elem))
+			}
+			if row >= 8 || col >= 8 {
+				return nil, fmt.Errorf("too many squares")
+			}
+			board[row][col] = string(elem)
+			col++
+		}
+	}
+	if row != 7 || col != 8 {
+		return nil, fmt.Errorf("incomplete board: ended at row %d, column %d", row+1, col)
+	}
+	return &board, nil
+}
+
+func getMoveNotationIndex(moveNotation string) (*[2]int, error) {
+	if len(moveNotation) < 2 {
+		return nil, fmt.Errorf("invalid move notation: %s", moveNotation)
+	}
+
+	square := moveNotation[len(moveNotation)-2:]
+	file := square[0]
+	rank := square[1]
+
+	if !unicode.IsLetter(rune(file)) || !unicode.IsDigit(rune(rank)) {
+		return nil, fmt.Errorf("invalid square: %s", square)
+	}
+
+	col := int(unicode.ToLower(rune(file)) - 'a')
+	rowDigit := int(rank - '0')
+	if rowDigit < 1 || rowDigit > 8 {
+		return nil, fmt.Errorf("invalid rank: %d", rowDigit)
+	}
+	row := 8 - rowDigit
+
+	return &[2]int{row, col}, nil
 }

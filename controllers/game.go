@@ -66,3 +66,24 @@ func PlayGame(c *gin.Context) {
 
 	utils.HandleConnection(user.ID, c.Writer, c.Request)
 }
+
+func ReConnect(c *gin.Context) {
+	token := c.Query("token")
+	claims, err := utils.ValidateToken(token)
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token", "details": err.Error()})
+		c.Abort()
+		return
+	}
+	var user models.User
+	result := db.DB.First(&user, claims["id"])
+	if result.Error != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		c.Abort()
+		return
+	}
+	gameId, _ := strconv.Atoi(c.Param("id"))
+
+	utils.HandleReConnection(user.ID, gameId, c.Writer, c.Request)
+}

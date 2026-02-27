@@ -46,6 +46,7 @@ func Init() {
 		&models.GameType{},
 		&models.UserGameRating{},
 		&models.Game{},
+		&models.GameMove{},
 	)
 
 	SeedGameTypes(DB)
