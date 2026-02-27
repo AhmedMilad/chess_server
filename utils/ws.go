@@ -121,6 +121,7 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 			continue
 		}
 		var moveError error
+		fmt.Println(message.Type)
 		switch message.Type {
 		case "move":
 			moveError = handleMove(game, &message) //TODO accept the piece color to validate the moves
@@ -128,8 +129,8 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 			moveError = handleLongCastle(game, message.Color, &message)
 		case "king_side_castle":
 			moveError = handleKingSideCastle(game, message.Color, &message)
-		case "enpassent":
-			moveError = handleEnpassent(game, message.Color, &message)
+		case "enpassant":
+			moveError = handleEnpassant(game, message.Color, &message)
 		default:
 			fmt.Println("Unhandled move type")
 		}

@@ -514,7 +514,77 @@ func handleLongCastle(game models.Game, pieceColor string, message *Message) err
 	return nil
 }
 
-func handleEnpassent(game models.Game, pieceColor string, message *Message) error {
+func handleEnpassant(game models.Game, pieceColor string, message *Message) error {
+	var moveData struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := json.Unmarshal(message.Data, &moveData); err != nil {
+		return errors.New("Error unmarshaling move data")
+	}
+
+	var moves []string
+	if len(game.Moves) > 0 {
+		if err := json.Unmarshal(game.Moves, &moves); err != nil {
+			fmt.Println("Failed to unmarshal moves:", err)
+			moves = []string{}
+		}
+	}
+	moves = append(moves, moveData.To)
+	newMoves, _ := json.Marshal(moves)
+	game.Moves = newMoves
+	board, err := GetBoardFromFenNotation(game.Board)
+
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	fromIndex, err := getMoveNotationIndex(moveData.From)
+	if err != nil {
+		return errors.New("Invalid move from")
+	}
+
+	toIndex, err := getMoveNotationIndex(moveData.To)
+	if err != nil {
+		return errors.New("Invalid move to")
+	}
+
+	target := "p"
+	deltaY := -1
+
+	if pieceColor == "b" {
+		target = "P"
+	}
+
+	if toIndex[1] > fromIndex[1] {
+		deltaY = 1
+	}
+
+	if board[(*fromIndex)[0]][(*fromIndex)[1]+deltaY] == target {
+		board[(*fromIndex)[0]][(*fromIndex)[1]+deltaY] = " "
+	}
+
+	currentSquare := board[(*fromIndex)[0]][(*fromIndex)[1]]
+	board[(*fromIndex)[0]][(*fromIndex)[1]] = " "
+	board[(*toIndex)[0]][(*toIndex)[1]] = currentSquare
+
+	newBoardNotation, err := GetFenNotation(*board)
+	if err != nil {
+		return errors.New("Invalid board notation")
+	}
+
+	game.Board = *newBoardNotation
+	if game.PlayerTurn == 1 {
+		game.PlayerTurn = 2
+	} else {
+		game.PlayerTurn = 1
+	}
+	if err := db.DB.Save(&game).Error; err != nil {
+		fmt.Println("Failed to save move:", err)
+	}
+	message.Board = *newBoardNotation
+	message.Turn = game.PlayerTurn
+
 	return nil
 }
 
