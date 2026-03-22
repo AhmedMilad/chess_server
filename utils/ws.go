@@ -16,12 +16,13 @@ var Upgrader = websocket.Upgrader{
 }
 
 type Message struct {
-	GameID int             `json:"game_id"`
-	Type   string          `json:"type"`
-	Color  string          `json:"color"`
-	Data   json.RawMessage `json:"data"`
-	Board  string          `json:"board"`
-	Turn   int             `json:"turn"`
+	GameID          int             `json:"game_id"`
+	Type            string          `json:"type"`
+	Color           string          `json:"color"`
+	Data            json.RawMessage `json:"data"`
+	Board           string          `json:"board"`
+	Turn            int             `json:"turn"`
+	EnpassantSquare string          `json:"enpassant_square"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {

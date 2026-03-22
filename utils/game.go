@@ -44,6 +44,14 @@ func InitGame() {
 	Ctx = context.Background()
 }
 
+type Player struct {
+	UserID               uint
+	GameTypeID           uint
+	Rating               int
+	LowerBoundRatingDiff int
+	UpperBoundRatingDiff int
+}
+
 func createGame(p1, p2 Player) {
 	boardNotation, _ := GetFenNotation(Board)
 	turn := rand.Intn(2)
@@ -64,6 +72,20 @@ func createGame(p1, p2 Player) {
 		p2 = tempPlayer
 	}
 	db.DB.Create(&game)
+
+	gameStates := []models.GameState{
+		{
+			UserID: p1.UserID,
+			GameID: game.ID,
+		},
+		{
+			UserID: p2.UserID,
+			GameID: game.ID,
+		},
+	}
+
+	db.DB.Create(&gameStates)
+
 	startGame := "start_game"
 	boardNotation, err := GetFenNotation(Board)
 	if err != nil {
@@ -99,14 +121,6 @@ func createGame(p1, p2 Player) {
 	}
 
 	fmt.Printf("Game created: %d vs %d\n", p1.UserID, p2.UserID)
-}
-
-type Player struct {
-	UserID               uint
-	GameTypeID           uint
-	Rating               int
-	LowerBoundRatingDiff int
-	UpperBoundRatingDiff int
 }
 
 func mutualFit(p1, p2 Player) bool {
@@ -356,6 +370,35 @@ func handleMove(game models.Game, message *Message) error {
 	}
 
 	currentSquare := board[(*fromIndex)[0]][(*fromIndex)[1]]
+
+	diff := toIndex[0] - fromIndex[0]
+
+	targetPlayerID := game.Player1ID
+	if game.PlayerTurn == 2 {
+		targetPlayerID = game.Player2ID
+	}
+	gameState := models.GameState{}
+	fetchErr := db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&gameState).Error
+
+	if fetchErr == nil {
+		if strings.ToLower(currentSquare) == "p" && math.Abs(float64(diff)) == 2 {
+
+			sqr, err := IndexToFenNotation(toIndex[0], toIndex[1])
+
+			if err == nil {
+				gameState.Enpassant = sqr
+			}
+		} else {
+			gameState.Enpassant = ""
+		}
+
+		if err := db.DB.Save(&gameState).Error; err != nil {
+			fmt.Println("Failed to save the game state:", err)
+		} else {
+			message.EnpassantSquare = gameState.Enpassant
+		}
+	}
+
 	board[(*fromIndex)[0]][(*fromIndex)[1]] = " "
 	board[(*toIndex)[0]][(*toIndex)[1]] = currentSquare
 
@@ -560,7 +603,7 @@ func handleEnpassant(game models.Game, pieceColor string, message *Message) erro
 		deltaY = 1
 	}
 
-	if board[(*fromIndex)[0]][(*fromIndex)[1]+deltaY] == target {
+	if (*fromIndex)[1]+deltaY >= 0 && (*fromIndex)[1]+deltaY <= 7 && board[(*fromIndex)[0]][(*fromIndex)[1]+deltaY] == target {
 		board[(*fromIndex)[0]][(*fromIndex)[1]+deltaY] = " "
 	}
 
@@ -840,4 +883,14 @@ func swap(stRow int, stCol int, tRow int, tCol int, board *[8][8]string) {
 	temp := board[stRow][stCol]
 	board[stRow][stCol] = board[tRow][tCol]
 	board[tRow][tCol] = temp
+}
+
+func IndexToFenNotation(row, col int) (string, error) {
+	if int(math.Max(float64(row), float64(col))) > 7 {
+		return "", fmt.Errorf("invalid fen coordinates")
+	}
+
+	ch := rune(col + 97)
+
+	return fmt.Sprintf("%c%d", ch, 8-row), nil
 }
