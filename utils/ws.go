@@ -87,6 +87,17 @@ func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *htt
 		Board:    game.Board,
 		Turn:     game.PlayerTurn,
 	}
+
+	targetPlayerID := game.Player2ID
+	if game.PlayerTurn == 2 {
+		targetPlayerID = game.Player1ID
+	}
+	gameState := models.GameState{}
+	fetchErr := db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&gameState).Error
+	if fetchErr == nil {
+		message.EnpassantSquare = gameState.Enpassant
+	}
+
 	msg, err := json.Marshal(message)
 	if err != nil {
 		fmt.Println("Invalid message")
@@ -122,7 +133,6 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 			continue
 		}
 		var moveError error
-		fmt.Println(message.Type)
 		switch message.Type {
 		case "move":
 			moveError = handleMove(game, &message) //TODO accept the piece color to validate the moves

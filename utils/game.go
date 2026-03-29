@@ -32,12 +32,13 @@ var Board [8][8]string = [8][8]string{
 }
 
 type NotificationMessage struct {
-	Type     string `json:"type"`
-	GameId   int    `json:"game_id"`
-	Opponent Player `json:"opponent"`
-	IsBlack  bool   `json:"is_black"`
-	Board    string `json:"board"`
-	Turn     int    `json:"turn"`
+	Type            string `json:"type"`
+	GameId          int    `json:"game_id"`
+	Opponent        Player `json:"opponent"`
+	IsBlack         bool   `json:"is_black"`
+	Board           string `json:"board"`
+	Turn            int    `json:"turn"`
+	EnpassantSquare string `json:"enpassant_square"`
 }
 
 func InitGame() {
