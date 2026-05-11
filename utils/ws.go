@@ -133,6 +133,9 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 			continue
 		}
 		var moveError error
+
+		moveError = genericHandleMove(game, &message)
+		
 		switch message.Type {
 		case "move":
 			moveError = handleMove(game, &message) //TODO accept the piece color to validate the moves
