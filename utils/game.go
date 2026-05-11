@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	"sync"
 )
 
 var Ctx context.Context
@@ -30,6 +31,8 @@ var Board [8][8]string = [8][8]string{
 	{"P", "P", "P", "P", "P", "P", "P", "P"},
 	{"R", "N", "B", "Q", "K", "B", "N", "R"},
 }
+
+var mu sync.Mutex
 
 type NotificationMessage struct {
 	Type            string `json:"type"`
@@ -182,29 +185,36 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 
 func MatchmakingWorker() {
 	for {
-		players, err := RDB.LRange(Ctx, "players_q", 0, -1).Result()
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
 
-		if len(players) == 0 {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		for _, playerRaw := range players {
-			matched := MatchPlayer(playerRaw)
-
-			if matched {
-				break
+			players, err := RDB.LRange(Ctx, "players_q", 0, -1).Result()
+			if err != nil {
+				time.Sleep(500 * time.Millisecond)
+				return
 			}
-		}
-		time.Sleep(500 * time.Millisecond)
+
+			if len(players) == 0 {
+				time.Sleep(500 * time.Millisecond)
+				return
+			}
+
+			for _, playerRaw := range players {
+				matched := MatchPlayer(playerRaw)
+
+				if matched {
+					break
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}()
 	}
 }
 
 func MatchPlayer(playerRaw string) bool {
+	//TODO this piece of code needs to be revised if there is a faster way to get the match.
+
 	err := RDB.Watch(Ctx, func(tx *redis.Tx) error {
 		players, err := tx.LRange(Ctx, "players_q", 0, -1).Result()
 		if err != nil {
@@ -225,6 +235,7 @@ func MatchPlayer(playerRaw string) bool {
 			if candidate.UserID == p.UserID {
 				continue
 			}
+
 			if candidate.GameTypeID == p.GameTypeID && mutualFit(p, candidate) {
 				pipe := tx.TxPipeline()
 				pipe.LRem(Ctx, "players_q", 1, raw)
@@ -232,6 +243,7 @@ func MatchPlayer(playerRaw string) bool {
 				pipe.SRem(Ctx, "players_q_set", raw)
 				pipe.SRem(Ctx, "players_q_set", playerRaw)
 				_, err := pipe.Exec(Ctx)
+
 				if err != nil {
 					return err
 				}
