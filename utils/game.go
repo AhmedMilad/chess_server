@@ -956,6 +956,17 @@ func IndexToFenNotation(row, col int) (string, error) {
 }
 
 func getKnightValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
+	var validMoves = make([][]int, 0)
+
+	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
+
+	if isThreatMove {
+		return validMoves
+	}
+
 	moves := [8][2]int{
 		{2, 1},
 		{2, -1},
@@ -966,8 +977,6 @@ func getKnightValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) 
 		{-1, 2},
 		{-1, -2},
 	}
-
-	var validMoves = make([][]int, 0)
 
 	for _, v := range moves {
 		deltaX := xPos + v[0]
@@ -995,6 +1004,14 @@ func getKnightValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) 
 func getAntiDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 
 	validMoves := make([][]int, 0)
+
+	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
+
+	if isThreatMove {
+		return validMoves
+	}
 
 	for i := 1; i < 8; i++ {
 		deltaX := xPos - i
@@ -1057,6 +1074,14 @@ func getDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 
 	validMoves := make([][]int, 0)
 
+	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
+
+	if isThreatMove {
+		return validMoves
+	}
+
 	for i := 1; i < 8; i++ {
 		deltaX := xPos + i
 
@@ -1117,6 +1142,14 @@ func getDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 func getVerticalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 	validMoves := make([][]int, 0)
 
+	isThreatMove := !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
+
+	if isThreatMove {
+		return validMoves
+	}
+
 	for i := 1; i < 8; i++ {
 		deltaX := xPos + i
 
@@ -1165,6 +1198,14 @@ func getVerticalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 
 	validMoves := make([][]int, 0)
+
+	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
+	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
+
+	if isThreatMove {
+		return validMoves
+	}
 
 	for i := 1; i < 8; i++ {
 
@@ -1216,6 +1257,10 @@ func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]stri
 func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 	validMoves := make([][]int, 0)
 
+	if !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board) {
+		return validMoves
+	}
+
 	if isWhite {
 		deltaY := yPos - 1
 
@@ -1226,19 +1271,21 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 				validMoves = append(validMoves, []int{xPos, deltaY})
 			}
 
-			if xPos+1 <= 7 {
-				targetSquare = board[xPos+1][deltaY]
+			if isVerticalSafe(isWhite, xPos, yPos, board) || !isKingOnVertical(isWhite, xPos, yPos, board) {
+				if xPos+1 <= 7 {
+					targetSquare = board[xPos+1][deltaY]
 
-				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-					validMoves = append(validMoves, []int{xPos + 1, deltaY})
+					if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+						validMoves = append(validMoves, []int{xPos + 1, deltaY})
+					}
 				}
-			}
 
-			if xPos-1 >= 0 {
-				targetSquare = board[xPos-1][deltaY]
+				if xPos-1 >= 0 {
+					targetSquare = board[xPos-1][deltaY]
 
-				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-					validMoves = append(validMoves, []int{xPos - 1, deltaY})
+					if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+						validMoves = append(validMoves, []int{xPos - 1, deltaY})
+					}
 				}
 			}
 		}
@@ -1260,21 +1307,24 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 				validMoves = append(validMoves, []int{xPos, deltaY})
 			}
 
-			if xPos+1 <= 7 {
-				targetSquare = board[xPos+1][deltaY]
+			if isVerticalSafe(isWhite, xPos, yPos, board) || !isKingOnVertical(isWhite, xPos, yPos, board) {
+				if xPos+1 <= 7 {
+					targetSquare = board[xPos+1][deltaY]
 
-				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-					validMoves = append(validMoves, []int{xPos + 1, deltaY})
+					if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+						validMoves = append(validMoves, []int{xPos + 1, deltaY})
+					}
+				}
+
+				if xPos-1 >= 0 {
+					targetSquare = board[xPos-1][deltaY]
+
+					if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+						validMoves = append(validMoves, []int{xPos - 1, deltaY})
+					}
 				}
 			}
 
-			if xPos-1 >= 0 {
-				targetSquare = board[xPos-1][deltaY]
-
-				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-					validMoves = append(validMoves, []int{xPos - 1, deltaY})
-				}
-			}
 		}
 
 		if deltaY+1 <= 7 {
@@ -1314,6 +1364,15 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 			continue
 		}
 
+		isSafeMove := isVerticalSafe(isWhite, deltaX, deltaY, board)
+		isSafeMove = isSafeMove && isHorizontalSafe(isWhite, deltaX, deltaY, board)
+		isSafeMove = isSafeMove && isDiagonalSafe(isWhite, deltaX, deltaY, board)
+		isSafeMove = isSafeMove && isAntiDiagonalSafe(isWhite, deltaX, deltaY, board)
+
+		if !isSafeMove {
+			continue
+		}
+
 		targetSquare := board[deltaX][deltaY]
 
 		if targetSquare == "" {
@@ -1324,4 +1383,422 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 	}
 
 	return validMoves
+}
+
+func isVerticalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+
+	for i := 1; i < 8; i++ {
+		deltaY := yPos + i
+
+		if deltaY > 7 {
+			break
+		}
+
+		targetSquare := board[xPos][deltaY]
+
+		if targetSquare != "" {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+
+				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaY := yPos - i
+
+		if deltaY < 0 {
+			break
+		}
+
+		targetSquare := board[xPos][deltaY]
+
+		if targetSquare != "" {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+
+				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+
+			}
+
+			break
+		}
+
+	}
+
+	return true
+}
+
+func isHorizontalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos + i
+
+		if deltaX > 7 {
+			break
+		}
+
+		targetSquare := board[deltaX][yPos]
+
+		if targetSquare != "" {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+
+				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos - i
+
+		if deltaX < 0 {
+			break
+		}
+
+		targetSquare := board[deltaX][yPos]
+
+		if targetSquare != "" {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+
+				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+
+			}
+
+			break
+		}
+
+	}
+
+	return true
+}
+
+func isDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos + i
+
+		if deltaX > 7 {
+			break
+		}
+
+		deltaY := yPos + i
+
+		if deltaY > 7 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos - i
+
+		if deltaX < 0 {
+			break
+		}
+
+		deltaY := yPos - i
+
+		if deltaY < 0 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+			}
+
+			break
+		}
+	}
+
+	return true
+}
+
+func isAntiDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos + i
+
+		if deltaX > 7 {
+			break
+		}
+
+		deltaY := yPos - i
+
+		if deltaY < 0 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos - i
+
+		if deltaX < 0 {
+			break
+		}
+
+		deltaY := yPos + i
+
+		if deltaY > 7 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+					return false
+				}
+			}
+
+			break
+		}
+	}
+
+	return true
+}
+
+func isKingOnVertical(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+	for i := 1; i < 8; i++ {
+		deltaY := yPos + i
+
+		if deltaY > 7 {
+			break
+		}
+
+		targetSquare := board[xPos][deltaY]
+
+		if targetSquare != "" {
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaY := yPos - i
+
+		if deltaY < 0 {
+			break
+		}
+
+		targetSquare := board[xPos][deltaY]
+
+		if targetSquare != "" {
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	return false
+}
+
+func isKingOnHorizontal(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+	for i := 1; i < 8; i++ {
+		deltaX := xPos + i
+
+		if deltaX > 7 {
+			break
+		}
+
+		targetSquare := board[deltaX][yPos]
+
+		if targetSquare != "" {
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos - i
+
+		if deltaX < 0 {
+			break
+		}
+
+		targetSquare := board[deltaX][yPos]
+
+		if targetSquare != "" {
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	return false
+}
+
+func isKingOnDiagonal(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos + i
+
+		if deltaX > 7 {
+			break
+		}
+
+		deltaY := yPos + i
+
+		if deltaY > 7 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos - i
+
+		if deltaX < 0 {
+			break
+		}
+
+		deltaY := yPos - i
+
+		if deltaY < 0 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	return false
+}
+
+func isKingOnAntiDiagonal(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos + i
+
+		if deltaX > 7 {
+			break
+		}
+
+		deltaY := yPos - i
+
+		if deltaY < 0 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+		deltaX := xPos - i
+
+		if deltaX < 0 {
+			break
+		}
+
+		deltaY := yPos + i
+
+		if deltaY > 7 {
+			break
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare != "" {
+
+			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
+				return true
+			}
+
+			break
+		}
+
+	}
+
+	return false
 }
