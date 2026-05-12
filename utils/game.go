@@ -465,7 +465,7 @@ func genericHandleMove(game models.Game, message *Message) error {
 	}
 
 	piece := board[fromIndex[0]][fromIndex[1]]
-	targettedSquare := board[toIndex[0]][toIndex[1]]
+	targetSquare := board[toIndex[0]][toIndex[1]]
 
 	if piece == "" {
 		return errors.New("Invalid piece")
@@ -980,11 +980,11 @@ func getKnightValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) 
 			continue
 		}
 
-		targettedSquare := board[deltaX][deltaY]
+		targetSquare := board[deltaX][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, deltaY})
-		} else if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+		} else if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 			validMoves = append(validMoves, []int{deltaX, deltaY})
 		}
 	}
@@ -1009,12 +1009,12 @@ func getAntiDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]st
 			break
 		}
 
-		targettedSquare := board[deltaX][deltaY]
+		targetSquare := board[deltaX][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, deltaY})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{deltaX, deltaY})
 			}
 
@@ -1036,12 +1036,12 @@ func getAntiDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]st
 			break
 		}
 
-		targettedSquare := board[deltaX][deltaY]
+		targetSquare := board[deltaX][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, deltaY})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{deltaX, deltaY})
 			}
 
@@ -1070,12 +1070,12 @@ func getDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 			break
 		}
 
-		targettedSquare := board[deltaX][deltaY]
+		targetSquare := board[deltaX][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, deltaY})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{deltaX, deltaY})
 			}
 
@@ -1097,12 +1097,12 @@ func getDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 			break
 		}
 
-		targettedSquare := board[deltaX][deltaY]
+		targetSquare := board[deltaX][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, deltaY})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{deltaX, deltaY})
 			}
 
@@ -1124,12 +1124,12 @@ func getVerticalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 			break
 		}
 
-		targettedSquare := board[deltaX][yPos]
+		targetSquare := board[deltaX][yPos]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, yPos})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{deltaX, yPos})
 			}
 
@@ -1145,12 +1145,12 @@ func getVerticalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 			break
 		}
 
-		targettedSquare := board[deltaX][yPos]
+		targetSquare := board[deltaX][yPos]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{deltaX, yPos})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{deltaX, yPos})
 			}
 
@@ -1174,12 +1174,12 @@ func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]stri
 			break
 		}
 
-		targettedSquare := board[xPos][deltaY]
+		targetSquare := board[xPos][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{xPos, deltaY})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{xPos, deltaY})
 			}
 
@@ -1196,12 +1196,12 @@ func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]stri
 			break
 		}
 
-		targettedSquare := board[xPos][deltaY]
+		targetSquare := board[xPos][deltaY]
 
-		if targettedSquare == "" {
+		if targetSquare == "" {
 			validMoves = append(validMoves, []int{xPos, deltaY})
 		} else {
-			if isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 				validMoves = append(validMoves, []int{xPos, deltaY})
 			}
 
@@ -1220,24 +1220,24 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 		deltaY := yPos - 1
 
 		if deltaY >= 0 {
-			targettedSquare := board[xPos][deltaY]
+			targetSquare := board[xPos][deltaY]
 
-			if targettedSquare == "" {
+			if targetSquare == "" {
 				validMoves = append(validMoves, []int{xPos, deltaY})
 			}
 
 			if xPos+1 <= 7 {
-				targettedSquare = board[xPos+1][deltaY]
+				targetSquare = board[xPos+1][deltaY]
 
-				if targettedSquare != "" && isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 					validMoves = append(validMoves, []int{xPos + 1, deltaY})
 				}
 			}
 
 			if xPos-1 >= 0 {
-				targettedSquare = board[xPos-1][deltaY]
+				targetSquare = board[xPos-1][deltaY]
 
-				if targettedSquare != "" && isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 					validMoves = append(validMoves, []int{xPos - 1, deltaY})
 				}
 			}
@@ -1246,7 +1246,7 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 		if deltaY-1 >= 0 {
 
 			if deltaY >= 0 && board[xPos][deltaY] == "" && board[xPos][deltaY-1] == "" && yPos == 6 {
-				validMoves = append(validMoves, []int{xPos, deltaY-1})
+				validMoves = append(validMoves, []int{xPos, deltaY - 1})
 			}
 		}
 
@@ -1254,24 +1254,24 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 		deltaY := yPos + 1
 
 		if deltaY <= 7 {
-			targettedSquare := board[xPos][deltaY]
+			targetSquare := board[xPos][deltaY]
 
-			if targettedSquare == "" {
+			if targetSquare == "" {
 				validMoves = append(validMoves, []int{xPos, deltaY})
 			}
 
 			if xPos+1 <= 7 {
-				targettedSquare = board[xPos+1][deltaY]
+				targetSquare = board[xPos+1][deltaY]
 
-				if targettedSquare != "" && isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 					validMoves = append(validMoves, []int{xPos + 1, deltaY})
 				}
 			}
 
 			if xPos-1 >= 0 {
-				targettedSquare = board[xPos-1][deltaY]
+				targetSquare = board[xPos-1][deltaY]
 
-				if targettedSquare != "" && isWhite != (strings.ToUpper(targettedSquare) == targettedSquare) {
+				if targetSquare != "" && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 					validMoves = append(validMoves, []int{xPos - 1, deltaY})
 				}
 			}
@@ -1280,7 +1280,7 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 		if deltaY+1 <= 7 {
 
 			if board[xPos][deltaY] == "" && board[xPos][deltaY+1] == "" && yPos == 1 {
-				validMoves = append(validMoves, []int{xPos, deltaY+1})
+				validMoves = append(validMoves, []int{xPos, deltaY + 1})
 			}
 		}
 
@@ -1289,6 +1289,39 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 	return validMoves
 }
 
-func getKingValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) {
+func getKingValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
+	moves := [8][2]int{
+		{1, 1},
+		{1, -1},
+		{-1, 1},
+		{-1, -1},
+		{0, 1},
+		{0, -1},
+		{1, 0},
+		{-1, 0},
+	}
 
+	var validMoves = make([][]int, 0)
+
+	for _, v := range moves {
+		deltaX := xPos + v[0]
+		if deltaX > 7 || deltaX < 0 {
+			continue
+		}
+
+		deltaY := yPos + v[1]
+		if deltaY > 7 || deltaY < 0 {
+			continue
+		}
+
+		targetSquare := board[deltaX][deltaY]
+
+		if targetSquare == "" {
+			validMoves = append(validMoves, []int{deltaX, deltaY})
+		} else if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+			validMoves = append(validMoves, []int{deltaX, deltaY})
+		}
+	}
+
+	return validMoves
 }
