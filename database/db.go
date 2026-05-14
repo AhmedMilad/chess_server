@@ -4,22 +4,23 @@ import (
 	"fmt"
 	"log"
 
-	"chess_server/config"
 	"chess_server/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"os"
 	"time"
 )
 
 var DB *gorm.DB
 
 func Init() {
-	host := config.Config.DBHost
-	user := config.Config.DBUser
-	password := config.Config.DBPassword
-	dbname := config.Config.DBName
-	port := config.Config.DBPort
-	sslmode := config.Config.DBSSLMode
+
+	host := os.Getenv("DB_HOST")
+	user := os.Getenv("DB_USER")
+	dbname := os.Getenv("DB_NAME")
+	password := os.Getenv("DB_PASSWORD")
+	port := os.Getenv("DB_PORT")
+	sslmode := os.Getenv("DB_SSLMODE")
 
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
