@@ -1483,8 +1483,8 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 	return validMoves
 }
 
-func getKingValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
-	moves := [8][2]int{
+func getKingValidMoves(isWhite bool, xPos int, yPos int, canLongCastle bool, canKingSideCastle bool, board *[8][8]string) [][]int {
+	moves := [][2]int{
 		{1, 1},
 		{1, -1},
 		{-1, 1},
@@ -1493,6 +1493,16 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 		{0, -1},
 		{1, 0},
 		{-1, 0},
+	}
+
+	if canKingSideCastle {
+		moves = append(moves, [2]int{0, 2})
+
+	}
+
+	if canKingSideCastle {
+		moves = append(moves, [2]int{0, -2})
+
 	}
 
 	var validMoves = make([][]int, 0)
@@ -2099,7 +2109,7 @@ func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 
 func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
 
-	if !isValidMove(toX, toY, getKingValidMoves(isWhite, fromX, fromY, board)) {
+	if !isValidMove(toX, toY, getKingValidMoves(isWhite, fromX, fromY, gameState.CanLongCastle, gameState.CanKingSideCastle, board)) {
 
 		return errors.New("Invalid move")
 	}

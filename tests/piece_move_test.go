@@ -337,14 +337,14 @@ func TestGenericHandleMove_WhitePinnedPieces(t *testing.T) {
 		},
 
 		{
-		    board: "8/8/8/8/r2BK3/8/8/8",
-		    from:  "d4",
-		    to:    "c5",
+			board: "8/8/8/8/r2BK3/8/8/8",
+			from:  "d4",
+			to:    "c5",
 		},
 		{
-		    board: "8/8/8/8/8/8/8/K1N4q",
-		    from:  "c1",
-		    to:    "d3",
+			board: "8/8/8/8/8/8/8/K1N4q",
+			from:  "c1",
+			to:    "d3",
 		},
 
 		{
@@ -376,6 +376,152 @@ func TestGenericHandleMove_WhitePinnedPieces(t *testing.T) {
 
 		if err == nil {
 			t.Fatalf("expected pin move to fail")
+		}
+	}
+}
+
+func TestGenericHandleMove_WhiteCastling(t *testing.T) {
+	testCases := []struct {
+		board         string
+		from          string
+		to            string
+		expectedBoard string
+	}{
+		{
+			board:         "8/8/8/8/8/8/8/4K2R",
+			from:          "e1",
+			to:            "g1",
+			expectedBoard: "8/8/8/8/8/8/8/5RK1",
+		},
+		{
+			board:         "8/8/8/8/8/8/8/R3K3",
+			from:          "e1",
+			to:            "c1",
+			expectedBoard: "8/8/8/8/8/8/8/2KR4",
+		},
+	}
+
+	db.Init()
+
+	for i, testCase := range testCases {
+		newGame := game
+		newGame.Board = testCase.board
+
+		message := &utils.Message{
+			Data: []byte(`{
+                    "from":"` + testCase.from + `",
+                    "to":"` + testCase.to + `"
+                }`),
+		}
+
+		err := utils.GenericHandleMove(newGame, message)
+
+		if err != nil {
+			t.Fatalf("case %d: unexpected castling error: %v", i, err)
+		}
+
+		if message.Board != testCase.expectedBoard {
+			t.Errorf("case %d: castling board state mismatch\nexpected: %s\ngot:      %s",
+				i, testCase.expectedBoard, message.Board)
+		}
+	}
+}
+
+func TestGenericHandleMove_BlackCastling(t *testing.T) {
+	testCases := []struct {
+		board         string
+		from          string
+		to            string
+		expectedBoard string
+	}{
+		{
+			board:         "4k2r/8/8/8/8/8/8/8",
+			from:          "e8",
+			to:            "g8",
+			expectedBoard: "5rk1/8/8/8/8/8/8/8",
+		},
+		{
+			board:         "r3k3/8/8/8/8/8/8/8",
+			from:          "e8",
+			to:            "c8",
+			expectedBoard: "2kr4/8/8/8/8/8/8/8",
+		},
+	}
+	db.Init()
+
+	for i, testCase := range testCases {
+		newGame := game
+		newGame.Board = testCase.board
+
+		message := &utils.Message{
+			Data: []byte(`{
+                    "from":"` + testCase.from + `",
+                    "to":"` + testCase.to + `"
+                }`),
+		}
+
+		err := utils.GenericHandleMove(newGame, message)
+
+		if err != nil {
+			t.Fatalf("case %d: unexpected castling error: %v", i, err)
+		}
+
+		if message.Board != testCase.expectedBoard {
+			t.Errorf("case %d: black castling board state mismatch\nexpected: %s\ngot:      %s",
+				i, testCase.expectedBoard, message.Board)
+		}
+	}
+}
+
+func TestGenericHandleMove_InvalidCastling(t *testing.T) {
+	testCases := []struct {
+		board string
+		from  string
+		to    string
+	}{
+		{
+			// white cannot castle while in check,
+			board: "4r1k1/8/8/8/8/8/8/4K2R",
+			from:  "e1",
+			to:    "g1",
+		},
+		{
+			// white cannot castle Through check,
+			board: "5rk1/8/8/8/8/8/8/4K2R",
+			from:  "e1",
+			to:    "g1",
+		},
+		{
+			// black cannot castle while in check,
+			board: "4k2r/8/8/8/8/8/8/4R1K1",
+			from:  "e8",
+			to:    "g8",
+		},
+		{
+			// black cannot castle Through check,
+			board: "4k2r/8/8/8/8/8/8/5RK1",
+			from:  "e8",
+			to:    "g8",
+		},
+	}
+
+	db.Init()
+
+	for _, testCase := range testCases {
+		newGame := game
+		newGame.Board = testCase.board
+
+		message := &utils.Message{
+			Data: []byte(`{
+					"from":"` + testCase.from + `",
+					"to":"` + testCase.to + `"
+				}`),
+		}
+
+		err := utils.GenericHandleMove(newGame, message)
+
+		if err == nil {
+			t.Fatalf("expected castling move to fail")
 		}
 	}
 }
