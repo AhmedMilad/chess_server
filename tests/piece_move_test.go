@@ -10,14 +10,24 @@ import (
 	"github.com/joho/godotenv"
 )
 
+//TODO this needs to be cleaned up
+var game = models.Game{
+	ID:         602,
+	Player1ID:  2,
+	Player2ID:  3,
+	PlayerTurn: 1,
+	GameTypeID: 1,
+	Board:      "8/8/8/8/8/8/4P3/4R3",
+}
+
 func TestGenericHandleMove_InvalidJSON(t *testing.T) {
-	game := models.Game{}
+	newGame := models.Game{}
 
 	message := &utils.Message{
 		Data: []byte(`invalid json`),
 	}
 
-	err := utils.GenericHandleMove(game, message)
+	err := utils.GenericHandleMove(newGame, message)
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -29,9 +39,7 @@ func TestGenericHandleMove_InvalidJSON(t *testing.T) {
 }
 
 func TestGenericHandleMove_InvalidMoveNotation(t *testing.T) {
-	game := models.Game{
-		Board: "8/8/8/8/8/8/8/8",
-	}
+	game.Board = "8/8/8/8/8/8/8/8"
 
 	message := &utils.Message{
 		Data: []byte(`{
@@ -54,9 +62,7 @@ func TestGenericHandleMove_InvalidMoveNotation(t *testing.T) {
 }
 
 func TestGenericHandleMove_InvalidFromMove(t *testing.T) {
-	game := models.Game{
-		Board: "some-fen",
-	}
+	game.Board = "invalid-fen"
 
 	message := &utils.Message{
 		Data: []byte(`{
@@ -73,9 +79,7 @@ func TestGenericHandleMove_InvalidFromMove(t *testing.T) {
 }
 
 func TestGenericHandleMove_EmptyPiece(t *testing.T) {
-	game := models.Game{
-		Board: "8/8/8/8/8/8/8/8",
-	}
+	game.Board = "8/8/8/8/8/8/8/8"
 
 	message := &utils.Message{
 		Data: []byte(`{
@@ -96,14 +100,7 @@ func TestGenericHandleMove_EmptyPiece(t *testing.T) {
 }
 
 func TestGenericHandleMove_PawnMove(t *testing.T) {
-	game := models.Game{
-		ID:         70,
-		Player1ID:  5,
-		Player2ID:  1,
-		PlayerTurn: 1,
-		Board:      "8/8/8/8/8/8/4P3/8",
-		GameTypeID: 1,
-	}
+	game.Board = "8/8/8/8/8/8/4P3/8"
 
 	message := &utils.Message{
 		Data: []byte(`{
@@ -132,12 +129,9 @@ func TestGenericHandleMove_PawnMove(t *testing.T) {
 }
 
 func TestGenericHandleMove_GameStateNotFound(t *testing.T) {
-	game := models.Game{
-		ID:         9999999999999999,
-		Player1ID:  5,
-		PlayerTurn: 1,
-		Board:      "8/8/8/8/8/8/4P3/8",
-	}
+	newGame := game
+	newGame.ID = 9999999999999999
+	newGame.Board = "8/8/8/8/8/8/4P3/8"
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"e2","to":"e3"}`),
@@ -145,7 +139,7 @@ func TestGenericHandleMove_GameStateNotFound(t *testing.T) {
 
 	db.Init()
 
-	err := utils.GenericHandleMove(game, message)
+	err := utils.GenericHandleMove(newGame, message)
 
 	if err == nil {
 		t.Fatal("expected error when game state is missing from DB")
@@ -153,16 +147,8 @@ func TestGenericHandleMove_GameStateNotFound(t *testing.T) {
 }
 
 func TestGenericHandleMove_KnightMove(t *testing.T) {
-	game := models.Game{
-		ID:         70,
-		Player1ID:  5,
-		Player2ID:  1,
-		PlayerTurn: 1,
-		Board:      "8/8/8/8/8/2n5/8/8",
-		GameTypeID: 1,
-	}
+	game.Board = "8/8/8/8/8/2n5/8/8"
 
-	// Move black knight from c3 to a2
 	message := &utils.Message{
 		Data: []byte(`{"from":"c3","to":"a2"}`),
 	}
@@ -177,9 +163,7 @@ func TestGenericHandleMove_KnightMove(t *testing.T) {
 }
 
 func TestGenericHandleMove_MalformedFEN(t *testing.T) {
-	game := models.Game{
-		Board: "not-a-fen-string",
-	}
+	game.Board = "not-a-fen-string"
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"e2","to":"e4"}`),
@@ -193,9 +177,14 @@ func TestGenericHandleMove_MalformedFEN(t *testing.T) {
 }
 
 func TestGenericHandleMove_TurnToggle(t *testing.T) {
-	db.Init()
+	game1 := game
+	game1.PlayerTurn = 1
+	game1.Board = "8/8/8/8/8/8/4P3/8"
+	game2 := game
+	game2.PlayerTurn = 2
+	game2.Board = "8/4p3/8/8/8/8/8/8"
 
-	game1 := models.Game{ID: 70, Player1ID: 1, Player2ID: 5, PlayerTurn: 1, Board: "8/8/8/8/8/8/4P3/8", GameTypeID: 1}
+	db.Init()
 	msg1 := utils.Message{Data: []byte(`{"from":"e2","to":"e3"}`)}
 
 	utils.GenericHandleMove(game1, &msg1)
@@ -204,7 +193,6 @@ func TestGenericHandleMove_TurnToggle(t *testing.T) {
 		t.Errorf("expected turn to switch to 2, got %d", msg1.Turn)
 	}
 
-	game2 := models.Game{ID: 70, Player1ID: 1, Player2ID: 5, PlayerTurn: 2, Board: "8/4p3/8/8/8/8/8/8", GameTypeID: 1}
 	msg2 := utils.Message{Data: []byte(`{"from":"e7","to":"e6"}`)}
 
 	utils.GenericHandleMove(game2, &msg2)
@@ -215,14 +203,7 @@ func TestGenericHandleMove_TurnToggle(t *testing.T) {
 }
 
 func TestGenericHandleMove_IllegalBishopMove(t *testing.T) {
-	game := models.Game{
-		ID:         70,
-		Player1ID:  1,
-		Player2ID:  5,
-		PlayerTurn: 1,
-		GameTypeID: 1,
-		Board:      "8/8/8/8/8/8/4B3/8",
-	}
+	game.Board = "8/8/8/8/8/8/4B3/8"
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"e2","to":"e3"}`),
@@ -239,19 +220,17 @@ func TestGenericHandleMove_IllegalBishopMove(t *testing.T) {
 
 func TestGenericHandleMove_CorrectPlayerState(t *testing.T) {
 	db.Init()
-	game := models.Game{
-		ID:         500,
-		Player1ID:  1,
-		Player2ID:  99,
-		PlayerTurn: 2,
-		Board:      "4k3/8/8/8/8/8/4P3/4K3",
-	}
+	newGame := game
+	
+	newGame.Player2ID = 99
+	newGame.PlayerTurn = 2
+	newGame.Board = "4k3/8/8/8/8/8/4P3/4K3"
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"e8","to":"d8"}`),
 	}
 
-	err := utils.GenericHandleMove(game, message)
+	err := utils.GenericHandleMove(newGame, message)
 
 	if err != nil && err.Error() == "record not found" {
 		t.Log("Successfully verified it looks for the current player's state")
@@ -259,15 +238,8 @@ func TestGenericHandleMove_CorrectPlayerState(t *testing.T) {
 }
 
 func TestGenericHandleMove_BoundaryMove(t *testing.T) {
+	game.Board = "7R/8/8/8/8/8/8/8"
 	db.Init()
-	game := models.Game{
-		ID:         70,
-		Player1ID:  1,
-		Player2ID:  5,
-		PlayerTurn: 1,
-		GameTypeID: 1,
-		Board:      "7R/8/8/8/8/8/8/8",
-	}
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"h8","to":"h7"}`),
@@ -280,14 +252,7 @@ func TestGenericHandleMove_BoundaryMove(t *testing.T) {
 }
 
 func TestGenericHandleMove_UnsupportedPiece(t *testing.T) {
-	game := models.Game{
-		ID:         70,
-		Player1ID:  1,
-		Player2ID:  5,
-		PlayerTurn: 1,
-		GameTypeID: 1,
-		Board:      "8/8/8/8/8/8/4X3/8",
-	}
+	game.Board = "8/8/8/8/8/8/4X3/8"
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"e2","to":"e3"}`),
@@ -306,16 +271,10 @@ func TestGenericHandleMove_UnsupportedPiece(t *testing.T) {
 }
 
 func TestGenericHandleMove_UpdatesFEN(t *testing.T) {
-	db.Init()
 	initialFen := "8/8/8/8/8/8/4P3/8"
-	game := models.Game{
-		ID:         70,
-		Player1ID:  1,
-		Player2ID:  5,
-		PlayerTurn: 1,
-		GameTypeID: 1,
-		Board:      "8/8/8/8/8/8/4P3/8",
-	}
+	game.Board = initialFen
+
+	db.Init()
 	message := &utils.Message{
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
@@ -331,22 +290,16 @@ func TestGenericHandleMove_UpdatesFEN(t *testing.T) {
 }
 
 func TestGenericHandleMove_RookBlocked(t *testing.T) {
-    db.Init()
-    game := models.Game{
-		ID:         70,
-		Player1ID:  1,
-		Player2ID:  5,
-		PlayerTurn: 1,
-		GameTypeID: 1,
-        Board:      "8/8/8/8/8/8/4P3/4R3",
-    }
+	game.Board = "8/8/8/8/8/8/4P3/4R3"
+	db.Init()
 
-    message := &utils.Message{
-        Data: []byte(`{"from":"e1","to":"e3"}`),
-    }
+	message := &utils.Message{
+		Data: []byte(`{"from":"e1","to":"e3"}`),
+	}
 
-    err := utils.GenericHandleMove(game, message)
-    if err == nil {
-        t.Fatal("Expected error: Rook cannot jump over the pawn at e2")
-    }
+	err := utils.GenericHandleMove(game, message)
+
+	if err == nil {
+		t.Fatal("Expected error: Rook cannot jump over the pawn at e2")
+	}
 }
