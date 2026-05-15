@@ -1536,13 +1536,36 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, canLongCastle bool, can
 		{-1, 0},
 	}
 
-	if canKingSideCastle {
-		moves = append(moves, [2]int{0, 2})
+	canCastle := isVerticalSafe(isWhite, xPos, yPos, board)
+	canCastle = canCastle && isHorizontalSafe(isWhite, xPos, yPos, board)
+	canCastle = canCastle && isDiagonalSafe(isWhite, xPos, yPos, board)
+	canCastle = canCastle && isAntiDiagonalSafe(isWhite, xPos, yPos, board)
+
+	if canCastle && canKingSideCastle && xPos+1 <= 7 {
+
+		isSafeMove := isVerticalSafe(isWhite, xPos+1, yPos, board)
+		isSafeMove = isSafeMove && isHorizontalSafe(isWhite, xPos+1, yPos, board)
+		isSafeMove = isSafeMove && isDiagonalSafe(isWhite, xPos+1, yPos, board)
+		isSafeMove = isSafeMove && isAntiDiagonalSafe(isWhite, xPos+1, yPos, board)
+
+		if isSafeMove {
+			moves = append(moves, [2]int{0, 2})
+
+		}
 
 	}
 
-	if canKingSideCastle {
-		moves = append(moves, [2]int{0, -2})
+	if canCastle && canLongCastle && xPos-1 >= 0 {
+
+		isSafeMove := isVerticalSafe(isWhite, xPos-1, yPos, board)
+		isSafeMove = isSafeMove && isHorizontalSafe(isWhite, xPos-1, yPos, board)
+		isSafeMove = isSafeMove && isDiagonalSafe(isWhite, xPos-1, yPos, board)
+		isSafeMove = isSafeMove && isAntiDiagonalSafe(isWhite, xPos-1, yPos, board)
+
+		if isSafeMove {
+			moves = append(moves, [2]int{0, -2})
+
+		}
 
 	}
 

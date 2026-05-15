@@ -497,6 +497,16 @@ func TestGenericHandleMove_InvalidCastling(t *testing.T) {
 			from:  "e8",
 			to:    "g8",
 		},
+		{
+			board: "4k3/8/8/8/8/8/8/4KBRR",
+			from:  "e1",
+			to:    "g1",
+		},
+		{
+			board: "4r3/8/8/8/8/8/8/4K2R",
+			from:  "e1",
+			to:    "g1",
+		},
 	}
 
 	for _, testCase := range testCases {
