@@ -474,42 +474,55 @@ func GenericHandleMove(game models.Game, message *Message) error {
 	}
 
 	targetPlayerID := game.Player1ID
+	opponentPlayerID := game.Player2ID
+
 	if game.PlayerTurn == 2 {
+		opponentPlayerID = game.Player1ID
 		targetPlayerID = game.Player2ID
 	}
 
-	gameState := models.GameState{}
-	fetchErr := db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&gameState).Error
+	// TODO fetch game states in one query
 
-	if fetchErr != nil {
-		return fetchErr
+	playerGameState := models.GameState{}
+	opponentGameState := models.GameState{}
+
+	err = db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&playerGameState).Error
+
+	if err != nil {
+		return err
+	}
+
+	err = db.DB.Where("game_id = ? AND user_id = ?", game.ID, opponentPlayerID).First(&opponentGameState).Error
+
+	if err != nil {
+		return err
 	}
 
 	switch piece {
 	case "p":
 
-		err := movePawn(false, fromX, fromY, toX, toY, &gameState, board)
+		err := movePawn(false, fromX, fromY, toX, toY, &playerGameState, &opponentGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "q":
-		err := moveQueen(false, fromX, fromY, toX, toY, &gameState, board)
+		err := moveQueen(false, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "b":
-		err := moveBishop(false, fromX, fromY, toX, toY, &gameState, board)
+		err := moveBishop(false, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "r":
-		err := moveRook(false, fromX, fromY, toX, toY, &gameState, board)
+		err := moveRook(false, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
@@ -517,14 +530,14 @@ func GenericHandleMove(game models.Game, message *Message) error {
 
 	case "k":
 
-		err := moveking(false, fromX, fromY, toX, toY, &gameState, board)
+		err := moveking(false, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "n":
-		err := moveKnight(false, fromX, fromY, toX, toY, &gameState, board)
+		err := moveKnight(false, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
@@ -532,41 +545,41 @@ func GenericHandleMove(game models.Game, message *Message) error {
 
 	case "P":
 
-		err := movePawn(true, fromX, fromY, toX, toY, &gameState, board)
+		err := movePawn(true, fromX, fromY, toX, toY, &playerGameState, &opponentGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "Q":
-		err := moveQueen(true, fromX, fromY, toX, toY, &gameState, board)
+		err := moveQueen(true, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "B":
-		err := moveBishop(true, fromX, fromY, toX, toY, &gameState, board)
+		err := moveBishop(true, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 	case "R":
-		err := moveRook(true, fromX, fromY, toX, toY, &gameState, board)
+		err := moveRook(true, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "K":
-		err := moveking(true, fromX, fromY, toX, toY, &gameState, board)
+		err := moveking(true, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "N":
-		err := moveKnight(true, fromX, fromY, toX, toY, &gameState, board)
+		err := moveKnight(true, fromX, fromY, toX, toY, &playerGameState, board)
 
 		if err != nil {
 			return err
@@ -592,7 +605,7 @@ func GenericHandleMove(game models.Game, message *Message) error {
 		return err
 	}
 
-	if err := db.DB.Save(&gameState).Error; err != nil {
+	if err := db.DB.Save(&playerGameState).Error; err != nil {
 		return err
 	}
 
@@ -1388,7 +1401,8 @@ func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]stri
 	return validMoves
 }
 
-func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
+func getPawnValidMoves(isWhite bool, xPos int, yPos int, enpassantSquare string, board *[8][8]string) [][]int {
+
 	validMoves := make([][]int, 0)
 
 	isThreatMove := !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
@@ -1397,6 +1411,25 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) []
 
 	if isThreatMove {
 		return validMoves
+	}
+
+	if enpassantSquare != " " {
+
+		enpassantSqr, err := getMoveNotationIndex(enpassantSquare)
+
+		if err == nil {
+			y := enpassantSqr[0]
+			x := enpassantSqr[1]
+
+			if isWhite {
+				y--
+			} else {
+				y++
+			}
+
+			validMoves = append(validMoves, []int{y, x})
+		}
+
 	}
 
 	if isWhite {
@@ -2070,14 +2103,15 @@ func isKingOnAntiDiagonal(isWhite bool, xPos int, yPos int, board *[8][8]string)
 	return false
 }
 
-func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
+func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, opponentGameState *models.GameState, board *[8][8]string) error {
 
-	if !isValidMove(toX, toY, getPawnValidMoves(isWhite, fromX, fromY, board)) {
+	if !isValidMove(toX, toY, getPawnValidMoves(isWhite, fromX, fromY, opponentGameState.Enpassant, board)) {
 		return errors.New("Invalid move")
 	}
 
 	diff := math.Abs(float64(toY) - float64(fromY))
 	gameState.Enpassant = " "
+
 	piece := board[fromY][fromX]
 
 	if diff == 2 {
@@ -2095,7 +2129,7 @@ func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 		if sqr == " " {
 			// en passent capture
 
-			board[toY][fromX] = " "
+			board[fromY][toX] = " "
 
 		}
 	}

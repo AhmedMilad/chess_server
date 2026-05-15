@@ -525,3 +525,66 @@ func TestGenericHandleMove_InvalidCastling(t *testing.T) {
 		}
 	}
 }
+
+func TestGenericHandleMove_EnPassant(t *testing.T) {
+	testCases := []struct {
+		board         string
+		from          string
+		to            string
+		expectedBoard string
+	}{
+		{
+			// white en passant capture to the left
+			board:         "8/8/8/3pP3/8/8/8/8",
+			from:          "e5",
+			to:            "d6",
+			expectedBoard: "8/8/3P4/8/8/8/8/8",
+		},
+		{
+			// white en passant capture to the right
+			board:         "8/8/8/4Pp2/8/8/8/8",
+			from:          "e5",
+			to:            "f6",
+			expectedBoard: "8/8/5P2/8/8/8/8/8",
+		},
+		{
+			// black en passant capture to the left
+			board:         "8/8/8/8/2Pp4/8/8/8",
+			from:          "d4",
+			to:            "c3",
+			expectedBoard: "8/8/8/8/8/2p5/8/8",
+		},
+		{
+			// black en passant capture to the right
+			board:         "8/8/8/8/3pP3/8/8/8",
+			from:          "d4",
+			to:            "e3",
+			expectedBoard: "8/8/8/8/8/4p3/8/8",
+		},
+	}
+
+	db.Init()
+
+	for _, testCase := range testCases {
+		newGame := game
+		newGame.Board = testCase.board
+
+		message := &utils.Message{
+			Data: []byte(`{
+                        "from":"` + testCase.from + `",
+                        "to":"` + testCase.to + `"
+                    }`),
+		}
+
+		err := utils.GenericHandleMove(newGame, message)
+
+		if err != nil {
+			t.Fatalf("unexpected en passant error: %v", err)
+		}
+
+		if message.Board != testCase.expectedBoard {
+			t.Errorf("en passant board state mismatch\nexpected: %s\ngot:      %s",
+				testCase.expectedBoard, message.Board)
+		}
+	}
+}
