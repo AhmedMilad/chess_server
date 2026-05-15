@@ -20,15 +20,7 @@ var game = models.Game{
 	Board:      "8/8/8/8/8/8/4P3/4R3",
 }
 
-func TestGenericHandleMove_PawnMove(t *testing.T) {
-	game.Board = "8/8/8/8/8/8/4P3/8"
-
-	message := &utils.Message{
-		Data: []byte(`{
-			"from":"e2",
-			"to":"e3"
-		}`),
-	}
+func Test_InitializeEnironment(t *testing.T) {
 
 	err := godotenv.Load("../.env")
 
@@ -38,14 +30,33 @@ func TestGenericHandleMove_PawnMove(t *testing.T) {
 
 	db.Init()
 
-	err = utils.GenericHandleMove(game, message)
+}
+
+func TestGenericHandleMove_PawnMove(t *testing.T) {
+
+	targetTurn := 1
+
+	if game.PlayerTurn == 1 {
+		targetTurn = 2
+	}
+
+	game.Board = "8/8/8/8/8/8/4P3/8"
+
+	message := &utils.Message{
+		Data: []byte(`{
+			"from":"e2",
+			"to":"e3"
+		}`),
+	}
+
+	err := utils.GenericHandleMove(game, message)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if message.Turn != 2 {
-		t.Fatalf("expected turn 2 got %d", message.Turn)
+	if message.Turn != targetTurn {
+		t.Fatalf("expected turn %d got %d", targetTurn, message.Turn)
 	}
 }
 
@@ -137,8 +148,6 @@ func TestGenericHandleMove_GameStateNotFound(t *testing.T) {
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
 
-	db.Init()
-
 	err := utils.GenericHandleMove(newGame, message)
 
 	if err == nil {
@@ -147,13 +156,11 @@ func TestGenericHandleMove_GameStateNotFound(t *testing.T) {
 }
 
 func TestGenericHandleMove_KnightMove(t *testing.T) {
-	game.Board = "8/8/8/8/8/2n5/8/8"
+	game.Board = "8/8/8/8/8/2N5/8/8"
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"c3","to":"a2"}`),
 	}
-
-	db.Init()
 
 	err := utils.GenericHandleMove(game, message)
 
@@ -184,7 +191,6 @@ func TestGenericHandleMove_TurnToggle(t *testing.T) {
 	game2.PlayerTurn = 2
 	game2.Board = "8/4p3/8/8/8/8/8/8"
 
-	db.Init()
 	msg1 := utils.Message{Data: []byte(`{"from":"e2","to":"e3"}`)}
 
 	utils.GenericHandleMove(game1, &msg1)
@@ -209,8 +215,6 @@ func TestGenericHandleMove_IllegalBishopMove(t *testing.T) {
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
 
-	db.Init()
-
 	err := utils.GenericHandleMove(game, message)
 
 	if err == nil {
@@ -219,7 +223,6 @@ func TestGenericHandleMove_IllegalBishopMove(t *testing.T) {
 }
 
 func TestGenericHandleMove_CorrectPlayerState(t *testing.T) {
-	db.Init()
 	newGame := game
 
 	newGame.Player2ID = 99
@@ -239,7 +242,6 @@ func TestGenericHandleMove_CorrectPlayerState(t *testing.T) {
 
 func TestGenericHandleMove_BoundaryMove(t *testing.T) {
 	game.Board = "7R/8/8/8/8/8/8/8"
-	db.Init()
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"h8","to":"h7"}`),
@@ -274,7 +276,6 @@ func TestGenericHandleMove_UpdatesFEN(t *testing.T) {
 	initialFen := "8/8/8/8/8/8/4P3/8"
 	game.Board = initialFen
 
-	db.Init()
 	message := &utils.Message{
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
@@ -291,7 +292,6 @@ func TestGenericHandleMove_UpdatesFEN(t *testing.T) {
 
 func TestGenericHandleMove_RookBlocked(t *testing.T) {
 	game.Board = "8/8/8/8/8/8/4P3/4R3"
-	db.Init()
 
 	message := &utils.Message{
 		Data: []byte(`{"from":"e1","to":"e3"}`),
@@ -346,7 +346,6 @@ func TestGenericHandleMove_WhitePinnedPieces(t *testing.T) {
 			from:  "c1",
 			to:    "d3",
 		},
-
 		{
 			board: "8/8/8/8/b7/8/2N5/3K4",
 			from:  "c2",
@@ -358,8 +357,6 @@ func TestGenericHandleMove_WhitePinnedPieces(t *testing.T) {
 			to:    "d5",
 		},
 	}
-
-	db.Init()
 
 	for _, testCase := range testCases {
 		newGame := game
@@ -400,8 +397,6 @@ func TestGenericHandleMove_WhiteCastling(t *testing.T) {
 			expectedBoard: "8/8/8/8/8/8/8/2KR4",
 		},
 	}
-
-	db.Init()
 
 	for i, testCase := range testCases {
 		newGame := game
@@ -447,7 +442,6 @@ func TestGenericHandleMove_BlackCastling(t *testing.T) {
 			expectedBoard: "2kr4/8/8/8/8/8/8/8",
 		},
 	}
-	db.Init()
 
 	for i, testCase := range testCases {
 		newGame := game
@@ -505,8 +499,6 @@ func TestGenericHandleMove_InvalidCastling(t *testing.T) {
 		},
 	}
 
-	db.Init()
-
 	for _, testCase := range testCases {
 		newGame := game
 		newGame.Board = testCase.board
@@ -562,8 +554,6 @@ func TestGenericHandleMove_EnPassant(t *testing.T) {
 			expectedBoard: "8/8/8/8/8/4p3/8/8",
 		},
 	}
-
-	db.Init()
 
 	for _, testCase := range testCases {
 		newGame := game

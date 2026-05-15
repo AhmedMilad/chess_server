@@ -498,6 +498,14 @@ func GenericHandleMove(game models.Game, message *Message) error {
 		return err
 	}
 
+	// player turn = 1, means white to play and 2 for black
+	sqr := board[fromY][fromX]
+
+	if sqr == " " || (game.PlayerTurn == 1) != (strings.ToUpper(sqr) == sqr) {
+
+		return errors.New("Invalid piece")
+	}
+
 	switch piece {
 	case "p":
 
