@@ -10,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-//TODO this needs to be cleaned up
+// TODO this needs to be cleaned up
 var game = models.Game{
 	ID:         602,
 	Player1ID:  2,
@@ -18,6 +18,35 @@ var game = models.Game{
 	PlayerTurn: 1,
 	GameTypeID: 1,
 	Board:      "8/8/8/8/8/8/4P3/4R3",
+}
+
+func TestGenericHandleMove_PawnMove(t *testing.T) {
+	game.Board = "8/8/8/8/8/8/4P3/8"
+
+	message := &utils.Message{
+		Data: []byte(`{
+			"from":"e2",
+			"to":"e3"
+		}`),
+	}
+
+	err := godotenv.Load("../.env")
+
+	if err != nil {
+		log.Println("No .env file found, using system environment variables")
+	}
+
+	db.Init()
+
+	err = utils.GenericHandleMove(game, message)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if message.Turn != 2 {
+		t.Fatalf("expected turn 2 got %d", message.Turn)
+	}
 }
 
 func TestGenericHandleMove_InvalidJSON(t *testing.T) {
@@ -96,35 +125,6 @@ func TestGenericHandleMove_EmptyPiece(t *testing.T) {
 
 	if err.Error() != "Invalid piece" {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestGenericHandleMove_PawnMove(t *testing.T) {
-	game.Board = "8/8/8/8/8/8/4P3/8"
-
-	message := &utils.Message{
-		Data: []byte(`{
-			"from":"e2",
-			"to":"e3"
-		}`),
-	}
-
-	err := godotenv.Load("../.env")
-
-	if err != nil {
-		log.Println("No .env file found, using system environment variables")
-	}
-
-	db.Init()
-
-	err = utils.GenericHandleMove(game, message)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if message.Turn != 2 {
-		t.Fatalf("expected turn 2 got %d", message.Turn)
 	}
 }
 
@@ -221,7 +221,7 @@ func TestGenericHandleMove_IllegalBishopMove(t *testing.T) {
 func TestGenericHandleMove_CorrectPlayerState(t *testing.T) {
 	db.Init()
 	newGame := game
-	
+
 	newGame.Player2ID = 99
 	newGame.PlayerTurn = 2
 	newGame.Board = "4k3/8/8/8/8/8/4P3/4K3"
@@ -301,5 +301,81 @@ func TestGenericHandleMove_RookBlocked(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("Expected error: Rook cannot jump over the pawn at e2")
+	}
+}
+
+func TestGenericHandleMove_WhitePinnedPieces(t *testing.T) {
+	testCases := []struct {
+		board string
+		from  string
+		to    string
+	}{
+		{
+			board: "4r3/8/8/8/8/8/4R3/4K3",
+			from:  "e2",
+			to:    "f2",
+		},
+		{
+			board: "8/8/b7/8/8/3B4/4K3/8",
+			from:  "d3",
+			to:    "e4",
+		},
+		{
+			board: "4r3/8/8/8/8/8/4N3/4K3",
+			from:  "e2",
+			to:    "f4",
+		},
+		{
+			board: "4r3/8/8/8/8/8/4Q3/4K3",
+			from:  "e2",
+			to:    "f2",
+		},
+		{
+			board: "4r3/8/8/8/8/8/4P3/4K3",
+			from:  "e2",
+			to:    "f3",
+		},
+
+		{
+		    board: "8/8/8/8/r2BK3/8/8/8",
+		    from:  "d4",
+		    to:    "c5",
+		},
+		{
+		    board: "8/8/8/8/8/8/8/K1N4q",
+		    from:  "c1",
+		    to:    "d3",
+		},
+
+		{
+			board: "8/8/8/8/b7/8/2N5/3K4",
+			from:  "c2",
+			to:    "e3",
+		},
+		{
+			board: "8/8/5q2/8/3P4/2K5/8/8",
+			from:  "d4",
+			to:    "d5",
+		},
+	}
+
+	db.Init()
+
+	for _, testCase := range testCases {
+		newGame := game
+		newGame.Board = testCase.board
+
+		message := &utils.Message{
+			Data: []byte(`{
+					"from":"` + testCase.from + `",
+					"to":"` + testCase.to + `"
+				}`),
+		}
+
+		err := utils.GenericHandleMove(newGame, message)
+
+		if err == nil {
+			t.Fatalf("expected pin move to fail")
+		}
 	}
 }
