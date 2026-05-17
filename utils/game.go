@@ -645,14 +645,10 @@ func getIntersection(arr1, arr2 [][]int) [][]int {
 }
 
 func isValidMove(isWhite bool, posX int, posY int, validMoves [][]int, board *[8][8]string) bool {
-	isInDoubleCheck, checkMoves := getCheckMoves(isWhite, board)
+	checkMoves := getCheckMoves(isWhite, board)
 
-	if isInDoubleCheck {
-		return false
-	} else {
-		if len(checkMoves) > 0 {
-			validMoves = getIntersection(validMoves, checkMoves)
-		}
+	if len(checkMoves) > 0 {
+		validMoves = getIntersection(validMoves, checkMoves)
 	}
 
 	found := false
@@ -1144,15 +1140,6 @@ func IndexToFenNotation(row, col int) (string, error) {
 func getKnightValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 	var validMoves = make([][]int, 0)
 
-	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
-
-	if isThreatMove {
-		return validMoves
-	}
-
 	moves := [8][2]int{
 		{2, 1},
 		{2, -1},
@@ -1190,14 +1177,6 @@ func getKnightValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) 
 func getAntiDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 
 	validMoves := make([][]int, 0)
-
-	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
-
-	if isThreatMove {
-		return validMoves
-	}
 
 	for i := 1; i < 8; i++ {
 		deltaX := xPos - i
@@ -1260,14 +1239,6 @@ func getDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 
 	validMoves := make([][]int, 0)
 
-	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
-
-	if isThreatMove {
-		return validMoves
-	}
-
 	for i := 1; i < 8; i++ {
 		deltaX := xPos + i
 
@@ -1328,14 +1299,6 @@ func getDiagonalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 func getVerticalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 	validMoves := make([][]int, 0)
 
-	isThreatMove := !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
-
-	if isThreatMove {
-		return validMoves
-	}
-
 	for i := 1; i < 8; i++ {
 		deltaY := yPos + i
 
@@ -1384,14 +1347,6 @@ func getVerticalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string
 func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]string) [][]int {
 
 	validMoves := make([][]int, 0)
-
-	isThreatMove := !isVerticalSafe(isWhite, xPos, yPos, board) && isKingOnVertical(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
-
-	if isThreatMove {
-		return validMoves
-	}
 
 	for i := 1; i < 8; i++ {
 
@@ -1444,14 +1399,6 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, enpassantSquare string,
 
 	validMoves := make([][]int, 0)
 
-	isThreatMove := !isHorizontalSafe(isWhite, xPos, yPos, board) && isKingOnHorizontal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnDiagonal(isWhite, xPos, yPos, board)
-	isThreatMove = isThreatMove || !isAntiDiagonalSafe(isWhite, xPos, yPos, board) && isKingOnAntiDiagonal(isWhite, xPos, yPos, board)
-
-	if isThreatMove {
-		return validMoves
-	}
-
 	if enpassantSquare != " " {
 
 		enpassantSqr, err := getMoveNotationIndex(enpassantSquare)
@@ -1481,24 +1428,19 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, enpassantSquare string,
 				validMoves = append(validMoves, []int{deltaY, xPos})
 			}
 
-			vSafe := isVerticalSafe(isWhite, xPos, yPos, board)
-			kingOnVertical := isKingOnVertical(isWhite, xPos, yPos, board)
+			if xPos+1 <= 7 {
+				targetSquare = board[deltaY][xPos+1]
 
-			if vSafe || (!vSafe && !kingOnVertical) {
-				if xPos+1 <= 7 {
-					targetSquare = board[deltaY][xPos+1]
-
-					if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-						validMoves = append(validMoves, []int{deltaY, xPos + 1})
-					}
+				if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+					validMoves = append(validMoves, []int{deltaY, xPos + 1})
 				}
+			}
 
-				if xPos-1 >= 0 {
-					targetSquare = board[deltaY][xPos-1]
+			if xPos-1 >= 0 {
+				targetSquare = board[deltaY][xPos-1]
 
-					if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-						validMoves = append(validMoves, []int{deltaY, xPos - 1})
-					}
+				if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+					validMoves = append(validMoves, []int{deltaY, xPos - 1})
 				}
 			}
 		}
@@ -1520,24 +1462,19 @@ func getPawnValidMoves(isWhite bool, xPos int, yPos int, enpassantSquare string,
 				validMoves = append(validMoves, []int{deltaY, xPos})
 			}
 
-			vSafe := isVerticalSafe(isWhite, xPos, yPos, board)
-			kingOnVertical := isKingOnVertical(isWhite, xPos, yPos, board)
+			if xPos+1 <= 7 {
+				targetSquare = board[deltaY][xPos+1]
 
-			if vSafe || (!vSafe && !kingOnVertical) {
-				if xPos+1 <= 7 {
-					targetSquare = board[deltaY][xPos+1]
-
-					if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-						validMoves = append(validMoves, []int{deltaY, xPos + 1})
-					}
+				if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+					validMoves = append(validMoves, []int{deltaY, xPos + 1})
 				}
+			}
 
-				if xPos-1 >= 0 {
-					targetSquare = board[deltaY][xPos-1]
+			if xPos-1 >= 0 {
+				targetSquare = board[deltaY][xPos-1]
 
-					if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-						validMoves = append(validMoves, []int{deltaY, xPos - 1})
-					}
+				if targetSquare != " " && isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
+					validMoves = append(validMoves, []int{deltaY, xPos - 1})
 				}
 			}
 
@@ -1967,202 +1904,15 @@ func isPawnSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
 	return true
 }
 
-func isKingOnVertical(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
-	for i := 1; i < 8; i++ {
-		deltaY := yPos + i
+func validateMove(isWhite bool, board *[8][8]string) error {
+	checkMoves := getCheckMoves(isWhite, board)
 
-		if deltaY > 7 {
-			break
-		}
-
-		targetSquare := board[deltaY][xPos]
-
-		if targetSquare != " " {
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
-				return true
-			}
-
-			break
-		}
-
+	if len(checkMoves) > 0 {
+		return errors.New("Invalid Move")
 	}
 
-	for i := 1; i < 8; i++ {
-		deltaY := yPos - i
+	return nil
 
-		if deltaY < 0 {
-			break
-		}
-
-		targetSquare := board[deltaY][xPos]
-
-		if targetSquare != " " {
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	return false
-}
-
-func isKingOnHorizontal(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
-	for i := 1; i < 8; i++ {
-		deltaX := xPos + i
-
-		if deltaX > 7 {
-			break
-		}
-
-		targetSquare := board[yPos][deltaX]
-
-		if targetSquare != " " {
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	for i := 1; i < 8; i++ {
-		deltaX := xPos - i
-
-		if deltaX < 0 {
-			break
-		}
-
-		targetSquare := board[yPos][deltaX]
-
-		if targetSquare != " " {
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare && strings.ToLower(targetSquare) == "k") {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	return false
-}
-
-func isKingOnDiagonal(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
-
-	for i := 1; i < 8; i++ {
-		deltaX := xPos + i
-
-		if deltaX > 7 {
-			break
-		}
-
-		deltaY := yPos + i
-
-		if deltaY > 7 {
-			break
-		}
-
-		targetSquare := board[deltaY][deltaX]
-
-		if targetSquare != " " {
-
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	for i := 1; i < 8; i++ {
-		deltaX := xPos - i
-
-		if deltaX < 0 {
-			break
-		}
-
-		deltaY := yPos - i
-
-		if deltaY < 0 {
-			break
-		}
-
-		targetSquare := board[deltaY][deltaX]
-
-		if targetSquare != " " {
-
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	return false
-}
-
-func isKingOnAntiDiagonal(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
-
-	for i := 1; i < 8; i++ {
-		deltaX := xPos + i
-
-		if deltaX > 7 {
-			break
-		}
-
-		deltaY := yPos - i
-
-		if deltaY < 0 {
-			break
-		}
-
-		targetSquare := board[deltaY][deltaX]
-
-		if targetSquare != " " {
-
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	for i := 1; i < 8; i++ {
-		deltaX := xPos - i
-
-		if deltaX < 0 {
-			break
-		}
-
-		deltaY := yPos + i
-
-		if deltaY > 7 {
-			break
-		}
-
-		targetSquare := board[deltaY][deltaX]
-
-		if targetSquare != " " {
-
-			if isWhite == (strings.ToUpper(targetSquare) == targetSquare) && strings.ToLower(targetSquare) == "k" {
-				return true
-			}
-
-			break
-		}
-
-	}
-
-	return false
 }
 
 func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, opponentGameState *models.GameState, board *[8][8]string) error {
@@ -2200,13 +1950,7 @@ func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
 
-	_, checkMoves := getCheckMoves(isWhite, board)
-
-	if len(checkMoves) > 0 {
-		return errors.New("Invalid Move")
-	}
-
-	return nil
+	return validateMove(isWhite, board)
 }
 
 func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
@@ -2318,7 +2062,7 @@ func moveKnight(isWhite bool, fromX int, fromY int, toX int, toY int, gameState 
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
 
-	return nil
+	return validateMove(isWhite, board)
 }
 
 func moveQueen(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
@@ -2340,7 +2084,7 @@ func moveQueen(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
 
-	return nil
+	return validateMove(isWhite, board)
 }
 
 func moveBishop(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
@@ -2360,7 +2104,7 @@ func moveBishop(isWhite bool, fromX int, fromY int, toX int, toY int, gameState 
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
 
-	return nil
+	return validateMove(isWhite, board)
 }
 
 func moveRook(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
@@ -2387,7 +2131,7 @@ func moveRook(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
 
-	return nil
+	return validateMove(isWhite, board)
 }
 
 func getKingPosition(isWhite bool, board *[8][8]string) (int, int) {
@@ -2746,57 +2490,15 @@ func getPawnCheckMoves(isWhite bool, board *[8][8]string) [][]int {
 	return [][]int{}
 }
 
-func getCheckMoves(isWhite bool, board *[8][8]string) (bool, [][]int) {
+func getCheckMoves(isWhite bool, board *[8][8]string) [][]int {
 
 	checkMoves := make([][]int, 0)
+	checkMoves = append(checkMoves, getVerticalCheckMoves(isWhite, board)...)
+	checkMoves = append(checkMoves, getHorizontalCheckMoves(isWhite, board)...)
+	checkMoves = append(checkMoves, getDiagonalCheckMoves(isWhite, board)...)
+	checkMoves = append(checkMoves, getAntiDiagonalCheckMoves(isWhite, board)...)
+	checkMoves = append(checkMoves, getKnightCheckMoves(isWhite, board)...)
+	checkMoves = append(checkMoves, getPawnCheckMoves(isWhite, board)...)
 
-	cnt := 0
-
-	tmp := getVerticalCheckMoves(isWhite, board)
-
-	if len(tmp) > 0 {
-		cnt++
-		checkMoves = append(checkMoves, tmp...)
-
-	}
-
-	tmp = getHorizontalCheckMoves(isWhite, board)
-
-	if len(tmp) > 0 {
-		cnt++
-		checkMoves = append(checkMoves, tmp...)
-	}
-
-	tmp = getDiagonalCheckMoves(isWhite, board)
-
-	if len(tmp) > 0 {
-		cnt++
-		checkMoves = append(checkMoves, tmp...)
-	}
-
-	tmp = getAntiDiagonalCheckMoves(isWhite, board)
-
-	if len(tmp) > 0 {
-		cnt++
-		checkMoves = append(checkMoves, tmp...)
-
-	}
-
-	tmp = getKnightCheckMoves(isWhite, board)
-
-	if len(tmp) > 0 {
-		cnt++
-		checkMoves = append(checkMoves, tmp...)
-
-	}
-
-	tmp = getPawnCheckMoves(isWhite, board)
-
-	if len(tmp) > 0 {
-		cnt++
-		checkMoves = append(checkMoves, tmp...)
-
-	}
-
-	return (cnt > 1), checkMoves
+	return checkMoves
 }
