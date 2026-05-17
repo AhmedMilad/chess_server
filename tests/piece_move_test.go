@@ -588,3 +588,141 @@ func TestGenericHandleMove_EnPassant(t *testing.T) {
 		}
 	}
 }
+
+func TestGenericHandleMove_SingleCheck(t *testing.T) {
+	game.Board = "4r3/8/8/8/8/8/3B4/4K3"
+
+	message := &utils.Message{
+		Data: []byte(`{
+            "from": "d2",
+            "to": "e3"
+        }`),
+	}
+
+	err := utils.GenericHandleMove(game, message)
+	if err != nil {
+		t.Fatalf("Expected move d2->e3 to legally block the check, but got error: %v", err)
+	}
+
+	game.Board = "4r3/8/8/8/8/8/3B4/4K3"
+
+	message = &utils.Message{
+		Data: []byte(`{
+            "from": "d2",
+            "to": "c3"
+        }`),
+	}
+
+	err = utils.GenericHandleMove(game, message)
+	if err == nil {
+		t.Fatalf("Expected move d2->c3 to fail because it ignores the check, but it was allowed")
+	}
+}
+
+func TestGenericHandleMove_DoubleCheck(t *testing.T) {
+	game.Board = "4r3/8/8/b7/8/2N5/8/4K3"
+
+	message := &utils.Message{
+		Data: []byte(`{
+            "from": "c3",
+            "to": "a5"
+        }`),
+	}
+
+	err := utils.GenericHandleMove(game, message)
+	if err == nil {
+		t.Fatalf("Expected Knight move to fail due to double check rules, but no error was thrown")
+	}
+}
+
+func TestGenericHandleMove_AbsolutePin(t *testing.T) {
+	game.Board = "8/8/5q2/8/8/2B5/8/K7"
+
+	illegalMessage := &utils.Message{
+		Data: []byte(`{
+            "from": "c3",
+            "to": "b4"
+        }`),
+	}
+
+	err := utils.GenericHandleMove(game, illegalMessage)
+	if err == nil {
+		t.Fatalf("Expected Bishop move to b4 to fail because it breaks an absolute pin, but it was allowed")
+	}
+
+	game.PlayerTurn = 1
+	game.Board = "8/8/5q2/8/8/2B5/8/K7"
+
+	legalMessage := &utils.Message{
+		Data: []byte(`{
+            "from": "c3",
+            "to": "d4"
+        }`),
+	}
+
+	err = utils.GenericHandleMove(game, legalMessage)
+	if err != nil {
+		t.Fatalf("Expected Bishop move to d4 to be legal along the pin line, but got error: %v", err)
+	}
+}
+
+func TestGenericHandleMove_PinAndCheckConflict(t *testing.T) {
+	game.Board = "4r3/8/b7/8/8/8/4R3/5K2"
+
+	message := &utils.Message{
+		Data: []byte(`{
+            "from": "e2",
+            "to": "e8"
+        }`),
+	}
+
+	err := utils.GenericHandleMove(game, message)
+	if err == nil {
+		t.Fatalf("Expected Rook capture on e8 to fail because the Rook is absolutely pinned by the a6 Bishop")
+	}
+}
+
+func TestGenericHandleMove_RookSameAxisPin(t *testing.T) {
+	game.Board = "4r3/8/8/8/8/4R3/8/4K3"
+
+	illegalMessage := &utils.Message{
+		Data: []byte(`{
+            "from": "e3",
+            "to": "a3"
+        }`),
+	}
+	err := utils.GenericHandleMove(game, illegalMessage)
+	if err == nil {
+		t.Fatalf("Expected Rook move to a3 to fail because it leaves the vertical pin line")
+	}
+
+	game.PlayerTurn = 1
+	game.Board = "4r3/8/8/8/8/4R3/8/4K3"
+
+	legalMessage := &utils.Message{
+		Data: []byte(`{
+            "from": "e3",
+            "to": "e6"
+        }`),
+	}
+	err = utils.GenericHandleMove(game, legalMessage)
+	if err != nil {
+		t.Fatalf("Expected Rook move to e6 to be valid since it stays on the pin line, got: %v", err)
+	}
+}
+
+func TestGenericHandleMove_EnPassantDiscoveredCheck(t *testing.T) {
+	game.Board = "8/8/8/r3Pp1K/8/8/8/8"
+
+	message := &utils.Message{
+		Data: []byte(`{
+            "from": "e5",
+            "to": "f6"
+        }`),
+	}
+
+	err := utils.GenericHandleMove(game, message)
+	if err == nil {
+		t.Fatalf("Expected En Passant to fail because removing both pawns exposes the White King to a discovered horizontal check from the a5 Rook")
+	}
+}
