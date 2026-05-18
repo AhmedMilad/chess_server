@@ -5,6 +5,7 @@ import (
 	"chess_server/models"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -114,20 +115,23 @@ func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *htt
 
 }
 
-func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
+func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 	for {
 		_, msg, err := ws.ReadMessage()
+
 		if err != nil {
-			delete(Players, playerId)
+			delete(Players, playerID)
 			break
 		}
 
 		var message Message
+
 		if err := json.Unmarshal(msg, &message); err != nil {
 			fmt.Println("Invalid message:", err)
 			continue
 		}
 		var game models.Game
+
 		if err := db.DB.First(&game, message.GameID).Error; err != nil {
 			fmt.Println("Game not found:", err)
 			continue
@@ -135,19 +139,6 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 		var moveError error
 
 		moveError = GenericHandleMove(game, &message)
-
-		switch message.Type {
-		case "move":
-			moveError = handleMove(game, &message) //TODO accept the piece color to validate the moves
-		case "long_castle":
-			moveError = handleLongCastle(game, message.Color, &message)
-		case "king_side_castle":
-			moveError = handleKingSideCastle(game, message.Color, &message)
-		case "enpassant":
-			moveError = handleEnpassant(game, message.Color, &message)
-		default:
-			fmt.Println("Unhandled move type")
-		}
 
 		if moveError != nil {
 			fmt.Println("Invalid Move Error: ", moveError)
@@ -158,18 +149,33 @@ func HandleSocketMessages(playerId uint, ws *websocket.Conn) {
 		if err != nil {
 			fmt.Println("Invalid message")
 		}
-		var opponentID uint
-		if game.Player1ID == playerId {
+
+		var opponentID, currentPlayerID uint
+
+		if game.Player1ID == playerID {
+
+			currentPlayerID = game.Player1ID
 			opponentID = game.Player2ID
-		} else if game.Player2ID == playerId {
+		} else if game.Player2ID == playerID {
+
 			opponentID = game.Player1ID
+			currentPlayerID = game.Player2ID
 		} else {
-			fmt.Println("Player not part of this game")
+
+			log.Println("Player not part of this game")
 			continue
 		}
+
 		if opponentWS, ok := Players[opponentID]; ok {
 			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 				opponentWS.Close()
+				delete(Players, opponentID)
+			}
+		}
+
+		if playerWS, ok := Players[currentPlayerID]; ok {
+			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+				playerWS.Close()
 				delete(Players, opponentID)
 			}
 		}
