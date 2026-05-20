@@ -844,7 +844,7 @@ func getHorizontalValidMoves(isWhite bool, xPos int, yPos int, board *[8][8]stri
 
 	for i := 1; i < 8; i++ {
 
-		deltaX := yPos - i
+		deltaX := xPos - i
 
 		if deltaX < 0 {
 			break
@@ -981,7 +981,7 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, canLongCastle bool, can
 	canCastle = canCastle && isDiagonalSafe(isWhite, xPos, yPos, board)
 	canCastle = canCastle && isAntiDiagonalSafe(isWhite, xPos, yPos, board)
 
-	if canCastle && canKingSideCastle && xPos+1 <= 7 {
+	if canKingSideCastle && xPos+1 <= 7 {
 
 		isSafeMove := isVerticalSafe(isWhite, xPos+1, yPos, board)
 		isSafeMove = isSafeMove && isHorizontalSafe(isWhite, xPos+1, yPos, board)
@@ -995,7 +995,7 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, canLongCastle bool, can
 
 	}
 
-	if canCastle && canLongCastle && xPos-1 >= 0 {
+	if canLongCastle && xPos-1 >= 0 {
 
 		isSafeMove := isVerticalSafe(isWhite, xPos-1, yPos, board)
 		isSafeMove = isSafeMove && isHorizontalSafe(isWhite, xPos-1, yPos, board)
