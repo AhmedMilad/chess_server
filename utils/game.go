@@ -531,6 +531,7 @@ func GenericHandleMove(game models.Game, message *Message) error {
 
 	message.Board = *newBoardNotation
 	message.Turn = game.PlayerTurn
+	message.EnpassantSquare = playerGameState.Enpassant
 
 	return nil
 }
