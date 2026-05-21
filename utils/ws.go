@@ -26,6 +26,7 @@ type Message struct {
 	CangLongCastle    bool            `json:"can_long_castle"`
 	CanKingSideCastle bool            `json:"can_king_side_castle"`
 	EnpassantSquare   string          `json:"enpassant_square"`
+	Opponent          Player          `json:"opponent"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -45,18 +46,18 @@ func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
 
 }
 
-func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *http.Request) {
+func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *http.Request) {
 	ws, err := Upgrader.Upgrade(w, r, nil)
 	defer func() {
-		delete(Players, playerId)
+		delete(Players, playerID)
 		ws.Close()
 	}()
 	if err != nil {
 		return
 	}
 	defer ws.Close()
-	delete(Players, playerId)
-	Players[playerId] = ws
+	delete(Players, playerID)
+	Players[playerID] = ws
 
 	var game models.Game
 	if err := db.DB.Preload("Player1").Preload("Player2").First(&game, gameId).Error; err != nil {
@@ -64,41 +65,39 @@ func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *htt
 		return
 	}
 
-	opponent := game.Player2
-	if game.Player1.ID != playerId {
-		opponent = game.Player1
+	color := "white"
+
+	if game.Player1ID != playerID {
+		color = "black"
 	}
 
-	var playerRating int
-	for _, rating := range opponent.Ratings {
-		if rating.GameTypeID == uint(game.GameTypeID) {
-			playerRating = rating.Rating
-		}
+	message := Message{
+		Type:   "reconnect_game",
+		GameID: gameId,
+		Board:  game.Board,
+		Turn:   game.PlayerTurn,
+		Color:  color,
 	}
 
-	opponentPlayer := Player{
-		UserID:     opponent.ID,
-		GameTypeID: uint(game.GameTypeID),
-		Rating:     playerRating,
+	oppoonetPlayerID := game.Player2ID
+
+	if playerID == game.Player2ID {
+		oppoonetPlayerID = game.Player1ID
+
 	}
 
-	message := NotificationMessage{
-		Type:     "reconnect_game",
-		GameId:   gameId,
-		Opponent: opponentPlayer,
-		IsBlack:  game.Player2ID == playerId,
-		Board:    game.Board,
-		Turn:     game.PlayerTurn,
-	}
+	playerGameState := models.GameState{}
+	opponentGameState := models.GameState{}
+	fetchErr := db.DB.Where("game_id = ? AND user_id = ?", game.ID, oppoonetPlayerID).First(&opponentGameState).Error
 
-	targetPlayerID := game.Player2ID
-	if game.PlayerTurn == 2 {
-		targetPlayerID = game.Player1ID
-	}
-	gameState := models.GameState{}
-	fetchErr := db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&gameState).Error
 	if fetchErr == nil {
-		message.EnpassantSquare = gameState.Enpassant
+		message.EnpassantSquare = opponentGameState.Enpassant
+	}
+
+	fetchErr = db.DB.Where("game_id = ? AND user_id = ?", game.ID, playerID).First(&playerGameState).Error
+	if fetchErr == nil {
+		message.CangLongCastle = playerGameState.CanLongCastle
+		message.CanKingSideCastle = playerGameState.CanKingSideCastle
 	}
 
 	msg, err := json.Marshal(message)
@@ -106,14 +105,14 @@ func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *htt
 		log.Println("Invalid message")
 	}
 
-	if opponentWS, ok := Players[playerId]; ok {
+	if opponentWS, ok := Players[playerID]; ok {
 		if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 			opponentWS.Close()
-			delete(Players, playerId)
+			delete(Players, playerID)
 		}
 	}
 
-	HandleSocketMessages(playerId, ws)
+	HandleSocketMessages(playerID, ws)
 
 }
 
