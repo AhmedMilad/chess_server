@@ -16,14 +16,16 @@ var Upgrader = websocket.Upgrader{
 }
 
 type Message struct {
-	GameID          int             `json:"game_id"`
-	Type            string          `json:"type"`
-	Status          string          `json:"status"`
-	Color           string          `json:"color"`
-	Data            json.RawMessage `json:"data"`
-	Board           string          `json:"board"`
-	Turn            int             `json:"turn"`
-	EnpassantSquare string          `json:"enpassant_square"`
+	GameID            int             `json:"game_id"`
+	Type              string          `json:"type"`
+	Status            string          `json:"status"`
+	Color             string          `json:"color"`
+	Data              json.RawMessage `json:"data"`
+	Board             string          `json:"board"`
+	Turn              int             `json:"turn"`
+	CangLongCastle    bool            `json:"can_long_castle"`
+	CanKingSideCastle bool            `json:"can_king_side_castle"`
+	EnpassantSquare   string          `json:"enpassant_square"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -137,6 +139,26 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
+		// player turn = 1, means white to play and 2 for black
+
+		targetPlayerID := game.Player1ID
+		opponentPlayerID := game.Player2ID
+
+		if game.PlayerTurn == 2 {
+			opponentPlayerID = game.Player1ID
+			targetPlayerID = game.Player2ID
+		}
+
+		// TODO fetch game states in one query
+
+		playerGameState := models.GameState{}
+		opponentGameState := models.GameState{}
+
+		message.Board = game.Board
+		message.Turn = game.PlayerTurn
+		message.EnpassantSquare = opponentGameState.Enpassant
+		message.Status = "failed"
+
 		var opponentID, currentPlayerID uint
 
 		if game.Player1ID == playerID {
@@ -153,17 +175,40 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
-		moveError := GenericHandleMove(game, &message)
+		err = db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&playerGameState).Error
 
-		msg, err = json.Marshal(message)
+		//TODO A message should be sent to the client indicating that there is no game state for the current game.
 		if err != nil {
-			log.Println("Invalid message")
+			log.Println(err.Error())
+			continue
 		}
+
+		err = db.DB.Where("game_id = ? AND user_id = ?", game.ID, opponentPlayerID).First(&opponentGameState).Error
+
+		//TODO A message should be sent to the client indicating that there is no game state for the current game.
+		if err != nil {
+			log.Println(err.Error())
+			continue
+		}
+
+		moveError := GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
 
 		if moveError != nil {
 			log.Println("Invalid Move Error: ", moveError)
 
+			// send only to the player who made the action
 			if playerWS, ok := Players[currentPlayerID]; ok {
+				message.CanKingSideCastle = playerGameState.CanKingSideCastle
+				message.CangLongCastle = playerGameState.CanLongCastle
+
+				msg, err = json.Marshal(message)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
 				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 					playerWS.Close()
 					delete(Players, opponentID)
@@ -173,7 +218,30 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
+		if err := db.DB.Save(&game).Error; err != nil {
+			log.Println(err.Error())
+
+			continue
+		}
+
+		if err := db.DB.Save(&playerGameState).Error; err != nil {
+			log.Println(err.Error())
+
+			continue
+		}
+
 		if opponentWS, ok := Players[opponentID]; ok {
+			message.CanKingSideCastle = opponentGameState.CanKingSideCastle
+			message.CangLongCastle = opponentGameState.CanLongCastle
+
+			msg, err = json.Marshal(message)
+
+			if err != nil {
+
+				log.Println("Invalid message")
+				continue
+			}
+
 			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 				opponentWS.Close()
 				delete(Players, opponentID)
@@ -181,6 +249,17 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		}
 
 		if playerWS, ok := Players[currentPlayerID]; ok {
+			message.CanKingSideCastle = playerGameState.CanKingSideCastle
+			message.CangLongCastle = playerGameState.CanLongCastle
+
+			msg, err = json.Marshal(message)
+
+			if err != nil {
+
+				log.Println("Invalid message")
+				continue
+			}
+
 			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 				playerWS.Close()
 				delete(Players, opponentID)
