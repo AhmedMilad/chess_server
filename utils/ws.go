@@ -153,11 +153,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		playerGameState := models.GameState{}
 		opponentGameState := models.GameState{}
 
-		message.Board = game.Board
-		message.Turn = game.PlayerTurn
-		message.EnpassantSquare = opponentGameState.Enpassant
-		message.Status = "failed"
-
 		var opponentID, currentPlayerID uint
 
 		if game.Player1ID == playerID {
@@ -189,6 +184,11 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			log.Println(err.Error())
 			continue
 		}
+
+		message.Board = game.Board
+		message.Turn = game.PlayerTurn
+		message.EnpassantSquare = opponentGameState.Enpassant
+		message.Status = "failed"
 
 		moveError := GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
 
