@@ -418,6 +418,16 @@ func GenericHandleMove(game models.Game, message *Message) error {
 		return errors.New("Invalid piece")
 	}
 
+	currentBoardNotation, fenErr := GetFenNotation(*board)
+	if fenErr != nil {
+		return fenErr
+	}
+
+	message.Board = *currentBoardNotation
+	message.Turn = game.PlayerTurn
+	message.EnpassantSquare = opponentGameState.Enpassant
+	message.Status = "failed"
+
 	switch piece {
 	case "p":
 
@@ -532,6 +542,7 @@ func GenericHandleMove(game models.Game, message *Message) error {
 	message.Board = *newBoardNotation
 	message.Turn = game.PlayerTurn
 	message.EnpassantSquare = playerGameState.Enpassant
+	message.Status = "ok"
 
 	return nil
 }

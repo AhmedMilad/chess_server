@@ -4,7 +4,6 @@ import (
 	db "chess_server/database"
 	"chess_server/models"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -19,6 +18,7 @@ var Upgrader = websocket.Upgrader{
 type Message struct {
 	GameID          int             `json:"game_id"`
 	Type            string          `json:"type"`
+	Status          string          `json:"status"`
 	Color           string          `json:"color"`
 	Data            json.RawMessage `json:"data"`
 	Board           string          `json:"board"`
@@ -58,7 +58,7 @@ func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *htt
 
 	var game models.Game
 	if err := db.DB.Preload("Player1").Preload("Player2").First(&game, gameId).Error; err != nil {
-		fmt.Println("Game not found:", err)
+		log.Println("Game not found:", err)
 		return
 	}
 
@@ -101,7 +101,7 @@ func HandleReConnection(playerId uint, gameId int, w http.ResponseWriter, r *htt
 
 	msg, err := json.Marshal(message)
 	if err != nil {
-		fmt.Println("Invalid message")
+		log.Println("Invalid message")
 	}
 
 	if opponentWS, ok := Players[playerId]; ok {
@@ -127,27 +127,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		var message Message
 
 		if err := json.Unmarshal(msg, &message); err != nil {
-			fmt.Println("Invalid message:", err)
+			log.Println("Invalid message:", err)
 			continue
 		}
 		var game models.Game
 
 		if err := db.DB.First(&game, message.GameID).Error; err != nil {
-			fmt.Println("Game not found:", err)
+			log.Println("Game not found:", err)
 			continue
-		}
-		var moveError error
-
-		moveError = GenericHandleMove(game, &message)
-
-		if moveError != nil {
-			fmt.Println("Invalid Move Error: ", moveError)
-			continue
-		}
-
-		msg, err = json.Marshal(message)
-		if err != nil {
-			fmt.Println("Invalid message")
 		}
 
 		var opponentID, currentPlayerID uint
@@ -163,6 +150,26 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		} else {
 
 			log.Println("Player not part of this game")
+			continue
+		}
+
+		moveError := GenericHandleMove(game, &message)
+
+		msg, err = json.Marshal(message)
+		if err != nil {
+			log.Println("Invalid message")
+		}
+
+		if moveError != nil {
+			log.Println("Invalid Move Error: ", moveError)
+
+			if playerWS, ok := Players[currentPlayerID]; ok {
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Close()
+					delete(Players, opponentID)
+				}
+			}
+
 			continue
 		}
 
