@@ -120,22 +120,26 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 		PlayerMutex.Unlock()
 	}
 
-	player1Notification := NotificationMessage{
-		Type:     startGame,
-		GameId:   int(game.ID),
-		Opponent: p2,
-		IsBlack:  false,
-		Board:    *boardNotation,
-		Turn:     game.PlayerTurn,
+	player1Notification := Message{
+		Type:         startGame,
+		GameID:       int(game.ID),
+		Opponent:     p2,
+		Color:        "white",
+		Board:        *boardNotation,
+		Turn:         game.PlayerTurn,
+		MyTime:       uint64(gameTime),
+		OpponentTime: uint64(gameTime),
 	}
 
-	player2Notification := NotificationMessage{
-		Type:     startGame,
-		GameId:   int(game.ID),
-		Opponent: p1,
-		IsBlack:  true,
-		Board:    *boardNotation,
-		Turn:     game.PlayerTurn,
+	player2Notification := Message{
+		Type:         startGame,
+		GameID:       int(game.ID),
+		Opponent:     p1,
+		Color:        "black",
+		Board:        *boardNotation,
+		Turn:         game.PlayerTurn,
+		MyTime:       uint64(gameTime),
+		OpponentTime: uint64(gameTime),
 	}
 
 	player1Data, _ := json.Marshal(&player1Notification)

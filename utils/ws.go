@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -27,6 +28,8 @@ type Message struct {
 	CanKingSideCastle bool            `json:"can_king_side_castle"`
 	EnpassantSquare   string          `json:"enpassant_square"`
 	Opponent          Player          `json:"opponent"`
+	MyTime            uint64          `json:"my_time"`
+	OpponentTime      uint64          `json:"opponent_time"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -81,12 +84,54 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		color = "black"
 	}
 
+	myTime := game.Player1RemainingTime
+	opponentTime := game.Player2RemainingTime
+
+	if playerID == game.Player2ID {
+
+		myTime = game.Player2RemainingTime
+		opponentTime = game.Player1RemainingTime
+	}
+
+	curTimeStamp := time.Now().UnixMilli()
+
+	if game.PlayerTurn == 1 {
+
+		calculatedTime := game.Player1RemainingTime - curTimeStamp + game.Player1LastMoveAt
+
+		if playerID == game.Player1ID {
+			myTime = calculatedTime
+		} else {
+			opponentTime = calculatedTime
+
+		}
+
+	} else {
+		calculatedTime := game.Player2RemainingTime - curTimeStamp + game.Player2LastMoveAt
+
+		if playerID == game.Player1ID {
+			opponentTime = calculatedTime
+		} else {
+			myTime = calculatedTime
+
+		}
+	}
+
+	if myTime < 0 {
+		myTime = 0
+	}
+	if opponentTime < 0 {
+		opponentTime = 0
+	}
+
 	message := Message{
-		Type:   "reconnect_game",
-		GameID: gameId,
-		Board:  game.Board,
-		Turn:   game.PlayerTurn,
-		Color:  color,
+		Type:         "reconnect_game",
+		GameID:       gameId,
+		Board:        game.Board,
+		Turn:         game.PlayerTurn,
+		Color:        color,
+		MyTime:       uint64(myTime),
+		OpponentTime: uint64(opponentTime),
 	}
 
 	oppoonetPlayerID := game.Player2ID
@@ -294,9 +339,19 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		opponentWS, ok := Players[opponentID]
 		PlayerMutex.Unlock()
 
+		if game.PlayerTurn == 1 {
+
+			UpdateWatch(game.ID, time.Duration(game.Player1RemainingTime)*time.Millisecond)
+		} else {
+
+			UpdateWatch(game.ID, time.Duration(game.Player2RemainingTime)*time.Millisecond)
+		}
+
 		if ok {
 			message.CanKingSideCastle = opponentGameState.CanKingSideCastle
 			message.CangLongCastle = opponentGameState.CanLongCastle
+			message.MyTime = uint64(game.Player2RemainingTime)
+			message.OpponentTime = uint64(game.Player1RemainingTime)
 
 			msg, err = json.Marshal(message)
 
@@ -321,6 +376,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		if ok {
 			message.CanKingSideCastle = playerGameState.CanKingSideCastle
 			message.CangLongCastle = playerGameState.CanLongCastle
+			message.MyTime = uint64(game.Player1RemainingTime)
+			message.OpponentTime = uint64(game.Player2RemainingTime)
 
 			msg, err = json.Marshal(message)
 
