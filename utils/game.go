@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"slices"
@@ -15,9 +16,10 @@ import (
 	"time"
 	"unicode"
 
+	"sync"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
-	"sync"
 )
 
 var Ctx context.Context
@@ -56,17 +58,32 @@ type Player struct {
 	UpperBoundRatingDiff int
 }
 
-func createGame(p1, p2 Player) {
+func createGame(p1, p2 Player, gameTypeID uint) {
+
 	boardNotation, _ := GetFenNotation(Board)
 	turn := rand.Intn(2)
-	game := models.Game{
-		Player1ID:  p1.UserID,
-		Player2ID:  p2.UserID,
-		GameTypeID: p1.GameTypeID,
-		Status:     "ongoing",
-		Board:      *boardNotation,
-		PlayerTurn: 1,
+
+	gameType := models.GameType{}
+	if err := db.DB.Where("id = ?", gameTypeID).First(&gameType).Error; err != nil {
+
+		log.Printf("Could not find a game type with the id %d while creating a game", gameTypeID)
+		return
 	}
+
+	minute := uint(60000)
+	gameTime := int64(gameType.Duration * minute)
+
+	game := models.Game{
+		Player1ID:            p1.UserID,
+		Player2ID:            p2.UserID,
+		GameTypeID:           gameTypeID,
+		Status:               "ongoing",
+		Board:                *boardNotation,
+		PlayerTurn:           1,
+		Player1RemainingTime: gameTime,
+		Player2RemainingTime: gameTime,
+	}
+
 	if turn == 1 {
 		temp := game.Player1ID
 		game.Player1ID = game.Player2ID
@@ -75,6 +92,7 @@ func createGame(p1, p2 Player) {
 		p1 = p2
 		p2 = tempPlayer
 	}
+
 	db.DB.Create(&game)
 
 	gameStates := []models.GameState{
@@ -88,14 +106,20 @@ func createGame(p1, p2 Player) {
 		},
 	}
 
+	AddWatch(game.ID, time.Duration(gameTime)*time.Millisecond)
+
 	db.DB.Create(&gameStates)
 
 	startGame := "start_game"
 	boardNotation, err := GetFenNotation(Board)
+
 	if err != nil {
+		PlayerMutex.Lock()
 		Players[p1.UserID].Close()
 		delete(Players, p1.UserID)
+		PlayerMutex.Unlock()
 	}
+
 	player1Notification := NotificationMessage{
 		Type:     startGame,
 		GameId:   int(game.ID),
@@ -104,6 +128,7 @@ func createGame(p1, p2 Player) {
 		Board:    *boardNotation,
 		Turn:     game.PlayerTurn,
 	}
+
 	player2Notification := NotificationMessage{
 		Type:     startGame,
 		GameId:   int(game.ID),
@@ -112,16 +137,36 @@ func createGame(p1, p2 Player) {
 		Board:    *boardNotation,
 		Turn:     game.PlayerTurn,
 	}
+
 	player1Data, _ := json.Marshal(&player1Notification)
 	player2Data, _ := json.Marshal(&player2Notification)
 
-	if err := Players[p1.UserID].WriteMessage(websocket.TextMessage, []byte(player1Data)); err != nil {
-		Players[p1.UserID].Close()
-		delete(Players, p1.UserID)
+	PlayerMutex.Lock()
+	player1WS, ok := Players[p1.UserID]
+	PlayerMutex.Unlock()
+
+	if ok {
+		if err := player1WS.WriteMessage(websocket.TextMessage, []byte(player1Data)); err != nil {
+			PlayerMutex.Lock()
+			Players[p1.UserID].Close()
+			delete(Players, p1.UserID)
+			PlayerMutex.Unlock()
+		}
+
 	}
-	if err := Players[p2.UserID].WriteMessage(websocket.TextMessage, []byte(player2Data)); err != nil {
-		Players[p1.UserID].Close()
-		delete(Players, p1.UserID)
+
+	PlayerMutex.Lock()
+	player2WS, ok := Players[p2.UserID]
+	PlayerMutex.Unlock()
+
+	if ok {
+		if err := player2WS.WriteMessage(websocket.TextMessage, []byte(player2Data)); err != nil {
+			PlayerMutex.Lock()
+			Players[p2.UserID].Close()
+			delete(Players, p2.UserID)
+			PlayerMutex.Unlock()
+		}
+
 	}
 
 	fmt.Printf("Game created: %d vs %d\n", p1.UserID, p2.UserID)
@@ -255,7 +300,7 @@ func MatchPlayer(playerRaw string) bool {
 				* create game in DB
 				* TODO: notify players
 				 */
-				createGame(p, candidate)
+				createGame(p, candidate, p.GameTypeID)
 
 				return nil
 			}
@@ -489,12 +534,26 @@ func GenericHandleMove(game *models.Game, playerGameState, opponentGameState *mo
 	}
 
 	game.Board = *newBoardNotation
+	graceLagTime := int64(300)
+	curTimeStamp := time.Now().UnixMilli()
+
 	if game.PlayerTurn == 1 {
+		timeTaken := curTimeStamp - game.Player1LastMoveAt
+		timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
+
+		game.Player1RemainingTime = int64(math.Max(0, float64(game.Player1RemainingTime-timeSpent)))
+
 		game.PlayerTurn = 2
 	} else {
+		timeTaken := curTimeStamp - game.Player2LastMoveAt
+		timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
+
+		game.Player2RemainingTime = int64(math.Max(0, float64(game.Player2RemainingTime-timeSpent)))
 		game.PlayerTurn = 1
 	}
 
+	game.Player1LastMoveAt = curTimeStamp
+	game.Player2LastMoveAt = curTimeStamp
 	message.Board = *newBoardNotation
 	message.Turn = game.PlayerTurn
 	message.EnpassantSquare = playerGameState.Enpassant

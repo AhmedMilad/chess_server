@@ -22,6 +22,7 @@ func main() {
 	db.Init()
 	utils.InitGame()
 	utils.InitRedis()
+	utils.TrackWatches()
 	go utils.MatchmakingWorker()
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{

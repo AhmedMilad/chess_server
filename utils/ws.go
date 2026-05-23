@@ -32,7 +32,9 @@ type Message struct {
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
 	ws, err := Upgrader.Upgrade(w, r, nil)
 	defer func() {
+		PlayerMutex.Lock()
 		delete(Players, playerId)
+		PlayerMutex.Unlock()
 		ws.Close()
 	}()
 	if err != nil {
@@ -40,7 +42,9 @@ func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
+	PlayerMutex.Lock()
 	Players[playerId] = ws
+	PlayerMutex.Unlock()
 
 	HandleSocketMessages(playerId, ws)
 
@@ -49,15 +53,21 @@ func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
 func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *http.Request) {
 	ws, err := Upgrader.Upgrade(w, r, nil)
 	defer func() {
+		PlayerMutex.Lock()
 		delete(Players, playerID)
+		PlayerMutex.Unlock()
 		ws.Close()
 	}()
 	if err != nil {
 		return
 	}
 	defer ws.Close()
+	PlayerMutex.Lock()
+
 	delete(Players, playerID)
 	Players[playerID] = ws
+
+	PlayerMutex.Unlock()
 
 	var game models.Game
 	if err := db.DB.Preload("Player1").Preload("Player2").First(&game, gameId).Error; err != nil {
@@ -105,10 +115,16 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		log.Println("Invalid message")
 	}
 
-	if opponentWS, ok := Players[playerID]; ok {
+	PlayerMutex.Lock()
+	opponentWS, ok := Players[playerID]
+	PlayerMutex.Unlock()
+
+	if ok {
 		if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 			opponentWS.Close()
+			PlayerMutex.Lock()
 			delete(Players, playerID)
+			PlayerMutex.Unlock()
 		}
 	}
 
@@ -121,7 +137,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		_, msg, err := ws.ReadMessage()
 
 		if err != nil {
+			PlayerMutex.Lock()
 			delete(Players, playerID)
+			PlayerMutex.Unlock()
 			break
 		}
 
@@ -135,6 +153,42 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 		if err := db.DB.First(&game, message.GameID).Error; err != nil {
 			log.Println("Game not found:", err)
+			continue
+		}
+
+		if game.Status != "ongoing" || game.Player1RemainingTime == 0 || game.Player1RemainingTime == 0 {
+
+			PlayerMutex.Lock()
+			playerWS, ok := Players[playerID]
+			PlayerMutex.Unlock()
+
+			if ok {
+
+				status := "win"
+
+				if game.WinnerID != &playerID {
+					status = "defeat"
+				}
+
+				message.Type = "game_over"
+				message.Status = status
+				message.Board = game.Board
+
+				msg, err = json.Marshal(message)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Close()
+					PlayerMutex.Lock()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+			}
 			continue
 		}
 
@@ -196,7 +250,12 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			log.Println("Invalid Move Error: ", moveError)
 
 			// send only to the player who made the action
-			if playerWS, ok := Players[currentPlayerID]; ok {
+
+			PlayerMutex.Lock()
+			playerWS, ok := Players[currentPlayerID]
+			PlayerMutex.Unlock()
+
+			if ok {
 				message.CanKingSideCastle = playerGameState.CanKingSideCastle
 				message.CangLongCastle = playerGameState.CanLongCastle
 
@@ -210,7 +269,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 					playerWS.Close()
-					delete(Players, opponentID)
+					PlayerMutex.Lock()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
 				}
 			}
 
@@ -229,7 +290,11 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
-		if opponentWS, ok := Players[opponentID]; ok {
+		PlayerMutex.Lock()
+		opponentWS, ok := Players[opponentID]
+		PlayerMutex.Unlock()
+
+		if ok {
 			message.CanKingSideCastle = opponentGameState.CanKingSideCastle
 			message.CangLongCastle = opponentGameState.CanLongCastle
 
@@ -243,11 +308,17 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 				opponentWS.Close()
+				PlayerMutex.Lock()
 				delete(Players, opponentID)
+				PlayerMutex.Unlock()
 			}
 		}
 
-		if playerWS, ok := Players[currentPlayerID]; ok {
+		PlayerMutex.Lock()
+		playerWS, ok := Players[currentPlayerID]
+		PlayerMutex.Unlock()
+
+		if ok {
 			message.CanKingSideCastle = playerGameState.CanKingSideCastle
 			message.CangLongCastle = playerGameState.CanLongCastle
 
@@ -261,7 +332,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
 				playerWS.Close()
-				delete(Players, opponentID)
+				PlayerMutex.Lock()
+				delete(Players, playerID)
+				PlayerMutex.Unlock()
 			}
 		}
 
