@@ -350,8 +350,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		if ok {
 			message.CanKingSideCastle = opponentGameState.CanKingSideCastle
 			message.CangLongCastle = opponentGameState.CanLongCastle
-			message.MyTime = uint64(game.Player2RemainingTime)
-			message.OpponentTime = uint64(game.Player1RemainingTime)
+
+			message.MyTime = uint64(game.Player1RemainingTime)
+			message.OpponentTime = uint64(game.Player2RemainingTime)
+
+			if opponentID == game.Player2ID {
+				message.MyTime = uint64(game.Player2RemainingTime)
+				message.OpponentTime = uint64(game.Player1RemainingTime)
+			}
 
 			msg, err = json.Marshal(message)
 
@@ -378,6 +384,11 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			message.CangLongCastle = playerGameState.CanLongCastle
 			message.MyTime = uint64(game.Player1RemainingTime)
 			message.OpponentTime = uint64(game.Player2RemainingTime)
+
+			if playerID == game.Player2ID {
+				message.MyTime = uint64(game.Player2RemainingTime)
+				message.OpponentTime = uint64(game.Player1RemainingTime)
+			}
 
 			msg, err = json.Marshal(message)
 

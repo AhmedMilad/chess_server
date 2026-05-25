@@ -102,6 +102,7 @@ func TrackWatches() {
 					PlayerMutex.Unlock()
 
 					message := Message{
+						GameID: int(game.ID),
 						Type:   "game_over",
 						Status: "win",
 						Board:  game.Board,
