@@ -168,17 +168,17 @@ func UpdateWatch(key uint, newTTL time.Duration) error {
 
 	success, err := RDB.Expire(Ctx, keyStr, newTTL).Result()
 	if err != nil {
-		log.Printf("Error updating TTL for key '%s': %v\n", key, err)
+		log.Printf("Error updating TTL for key '%d': %v\n", key, err)
 		return err
 	}
 
 	if success {
 
 		ActiveTrackers.Store(keyStr, true)
-		log.Printf("Successfully updated key '%s' with a new TTL of %v\n", key, newTTL)
+		log.Printf("Successfully updated key '%d' with a new TTL of %v\n", key, newTTL)
 	} else {
 
-		message := fmt.Sprint("Failed to update TTL: Key '%s' does not exist in Redis.\n", key)
+		message := fmt.Sprintf("Failed to update TTL: Key '%d' does not exist in Redis.\n", key)
 
 		log.Println(message)
 		ActiveTrackers.Delete(keyStr)
