@@ -201,7 +201,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
-		if game.Status != "ongoing" || game.Player1RemainingTime == 0 || game.Player1RemainingTime == 0 {
+		if game.Status != "ongoing" || game.Player1RemainingTime == 0 {
 
 			PlayerMutex.Lock()
 			playerWS, ok := Players[playerID]
