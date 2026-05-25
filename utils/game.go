@@ -2005,3 +2005,156 @@ func getCheckMoves(isWhite bool, board *[8][8]string) [][]int {
 
 	return checkMoves
 }
+
+func isCheckMate(playerID int, playerGameState, opponentGameState models.GameState, game models.Game) (bool, error) {
+
+	isWhite := (playerID == int(game.Player1ID)) //player1 always white
+	board, err := GetBoardFromFenNotation(game.Board)
+
+	if err != nil {
+		return false, err
+	}
+
+	checkMoves := getCheckMoves(isWhite, board)
+
+	if len(checkMoves) == 0 {
+		return false, nil
+
+	}
+
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			piece := board[y][x]
+
+			if piece == " " || (isWhite != (strings.ToUpper(piece) == piece)) {
+				continue
+			}
+
+			pn := strings.ToLower(piece)
+
+			switch pn {
+			case "p":
+
+				moves := getPawnValidMoves(isWhite, x, y, "", board)
+
+				for _, v := range moves {
+
+					boardCopy := *board
+					playerStateCopy := playerGameState
+					opponentStateCopy := opponentGameState
+
+					err := movePawn(isWhite, x, y, v[1], v[0], &playerStateCopy, &opponentStateCopy, &boardCopy)
+
+					if err != nil {
+						continue
+					}
+
+					return false, nil
+				}
+
+			case "q":
+				moves := make([][]int, 0)
+
+				moves = append(moves, getVerticalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getHorizontalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getDiagonalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getAntiDiagonalValidMoves(isWhite, x, y, board)...)
+
+				for _, v := range moves {
+
+					boardCopy := *board
+					playerStateCopy := playerGameState
+
+					err := moveQueen(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+
+					if err != nil {
+						continue
+					}
+
+					return false, nil
+				}
+
+			case "b":
+				moves := make([][]int, 0)
+
+				moves = append(moves, getDiagonalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getAntiDiagonalValidMoves(isWhite, x, y, board)...)
+
+				for _, v := range moves {
+
+					boardCopy := *board
+					playerStateCopy := playerGameState
+
+					err := moveBishop(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+
+					if err != nil {
+						continue
+					}
+
+					return false, nil
+				}
+
+			case "r":
+				moves := make([][]int, 0)
+
+				moves = append(moves, getVerticalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getHorizontalValidMoves(isWhite, x, y, board)...)
+
+				for _, v := range moves {
+
+					boardCopy := *board
+					playerStateCopy := playerGameState
+
+					err := moveRook(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+
+					if err != nil {
+						continue
+					}
+
+					return false, nil
+				}
+
+			case "k":
+
+				moves := getKingValidMoves(isWhite, x, y, playerGameState.CanLongCastle, playerGameState.CanKingSideCastle, board)
+
+				for _, v := range moves {
+
+					boardCopy := *board
+					playerStateCopy := playerGameState
+
+					err := moveking(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+
+					if err != nil {
+						continue
+					}
+					return false, nil
+
+				}
+
+			case "n":
+
+				moves := getKnightValidMoves(isWhite, x, y, board)
+
+				for _, v := range moves {
+
+					boardCopy := *board
+					playerStateCopy := playerGameState
+
+					err := moveKnight(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+
+					if err != nil {
+						continue
+					}
+					return false, nil
+
+				}
+
+			default:
+				return false, errors.New("Invalid piece")
+			}
+		}
+	}
+
+	return true, nil
+}

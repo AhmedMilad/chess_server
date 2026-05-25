@@ -103,7 +103,7 @@ func TrackWatches() {
 
 					message := Message{
 						GameID: int(game.ID),
-						Type:   "game_over",
+						Type:   "time_out",
 						Status: "win",
 						Board:  game.Board,
 					}
@@ -142,7 +142,7 @@ func TrackWatches() {
 						}
 					}
 
-					log.Printf("[Event] Key '%s' triggered action via channel '%s'\n", key)
+					log.Printf("[Event] Key '%s' triggered action'\n", key)
 				}(key)
 			}
 		}

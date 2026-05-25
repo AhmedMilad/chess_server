@@ -215,7 +215,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					status = "defeat"
 				}
 
-				message.Type = "game_over"
+				message.Type = "time_out"
 				message.Status = status
 				message.Board = game.Board
 
@@ -335,10 +335,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
-		PlayerMutex.Lock()
-		opponentWS, ok := Players[opponentID]
-		PlayerMutex.Unlock()
-
 		if game.PlayerTurn == 1 {
 
 			UpdateWatch(game.ID, time.Duration(game.Player1RemainingTime)*time.Millisecond)
@@ -347,7 +343,78 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			UpdateWatch(game.ID, time.Duration(game.Player2RemainingTime)*time.Millisecond)
 		}
 
-		if ok {
+		PlayerMutex.Lock()
+
+		opponentWS, opponentOk := Players[opponentID]
+		playerWS, playerOk := Players[currentPlayerID]
+
+		PlayerMutex.Unlock()
+
+		if playerOk && opponentOk {
+			isMate, mateErr := isCheckMate(int(opponentID), playerGameState, opponentGameState, game)
+
+			if mateErr != nil {
+				log.Printf("Error while getting the check mate status: %s", mateErr.Error())
+			}
+
+			if isMate {
+
+				checkMateMessage := Message{
+					GameID: int(game.ID),
+					Type:   "checkmate",
+					Board:  game.Board,
+					Status: "win",
+					Data: message.Data,
+				}
+
+				msg, err := json.Marshal(checkMateMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+				checkMateMessage.Status = "defeat"
+
+				msg, err = json.Marshal(checkMateMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+				game.WinnerID = &playerID
+				game.Status = "finished"
+				//TODO calutate the points awarded and deducted here
+
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				continue
+			}
+
+		}
+
+		if opponentOk {
 			message.CanKingSideCastle = opponentGameState.CanKingSideCastle
 			message.CangLongCastle = opponentGameState.CanLongCastle
 
@@ -368,18 +435,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			}
 
 			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				opponentWS.Close()
 				PlayerMutex.Lock()
+				opponentWS.Close()
 				delete(Players, opponentID)
 				PlayerMutex.Unlock()
 			}
 		}
 
-		PlayerMutex.Lock()
-		playerWS, ok := Players[currentPlayerID]
-		PlayerMutex.Unlock()
-
-		if ok {
+		if playerOk {
 			message.CanKingSideCastle = playerGameState.CanKingSideCastle
 			message.CangLongCastle = playerGameState.CanLongCastle
 			message.MyTime = uint64(game.Player1RemainingTime)
@@ -399,8 +462,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			}
 
 			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				playerWS.Close()
 				PlayerMutex.Lock()
+				playerWS.Close()
 				delete(Players, playerID)
 				PlayerMutex.Unlock()
 			}
