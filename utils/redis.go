@@ -82,9 +82,18 @@ func TrackWatches() {
 						pID = game.Player2ID
 					}
 
+					winnerTime := game.Player1RemainingTime
+
 					if wID == uint(pID) {
 						lID = game.Player1ID
 						wID = game.Player2ID
+
+						game.Player1RemainingTime = 0
+						winnerTime = game.Player2RemainingTime
+
+					} else {
+						game.Player2RemainingTime = 0
+
 					}
 
 					game.Status = "finished"
@@ -102,10 +111,12 @@ func TrackWatches() {
 					PlayerMutex.Unlock()
 
 					message := Message{
-						GameID: int(game.ID),
-						Type:   "time_out",
-						Status: "win",
-						Board:  game.Board,
+						GameID:       int(game.ID),
+						Type:         "time_out",
+						Status:       "win",
+						Board:        game.Board,
+						MyTime:       uint64(winnerTime),
+						OpponentTime: 0,
 					}
 					msg1, err := json.Marshal(message)
 
@@ -125,6 +136,8 @@ func TrackWatches() {
 					}
 
 					message.Status = "defeat"
+					message.MyTime = 0
+					message.OpponentTime = uint64(winnerTime)
 					msg2, err := json.Marshal(message)
 
 					if err != nil {
