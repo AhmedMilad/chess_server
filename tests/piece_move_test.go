@@ -45,7 +45,7 @@ func TestGenericHandleMove_PawnMove(t *testing.T) {
 		}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -63,7 +63,7 @@ func TestGenericHandleMove_InvalidJSON(t *testing.T) {
 		Data: []byte(`invalid json`),
 	}
 
-	err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -84,7 +84,7 @@ func TestGenericHandleMove_InvalidMoveNotation(t *testing.T) {
 		}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -107,7 +107,7 @@ func TestGenericHandleMove_InvalidFromMove(t *testing.T) {
 		}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -124,7 +124,7 @@ func TestGenericHandleMove_EmptyPiece(t *testing.T) {
 		}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -144,7 +144,7 @@ func TestGenericHandleMove_GameStateNotFound(t *testing.T) {
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
 
-	err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error when game state is missing from DB")
@@ -159,7 +159,7 @@ func TestGenericHandleMove_KnightMove(t *testing.T) {
 		Data: []byte(`{"from":"c3","to":"a2"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err != nil {
 		t.Fatalf("unexpected error moving knight: %v", err)
@@ -173,7 +173,7 @@ func TestGenericHandleMove_MalformedFEN(t *testing.T) {
 		Data: []byte(`{"from":"e2","to":"e4"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error due to malformed FEN")
@@ -190,7 +190,7 @@ func TestGenericHandleMove_TurnToggle(t *testing.T) {
 
 	msg1 := utils.Message{Data: []byte(`{"from":"e2","to":"e3"}`)}
 
-	utils.GenericHandleMove(&game1, &playerGameState, &opponentGameState, &msg1)
+	utils.GenericHandleMove(&game1, &models.GameMove{}, &playerGameState, &opponentGameState, &msg1)
 
 	if msg1.Turn != 2 {
 		t.Errorf("expected turn to switch to 2, got %d", msg1.Turn)
@@ -198,7 +198,7 @@ func TestGenericHandleMove_TurnToggle(t *testing.T) {
 
 	msg2 := utils.Message{Data: []byte(`{"from":"e7","to":"e6"}`)}
 
-	utils.GenericHandleMove(&game2, &playerGameState, &opponentGameState, &msg2)
+	utils.GenericHandleMove(&game2, &models.GameMove{}, &playerGameState, &opponentGameState, &msg2)
 
 	if msg2.Turn != 1 {
 		t.Errorf("expected turn to switch back to 1, got %d", msg2.Turn)
@@ -212,7 +212,7 @@ func TestGenericHandleMove_IllegalBishopMove(t *testing.T) {
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("expected error for illegal bishop move")
@@ -230,7 +230,7 @@ func TestGenericHandleMove_CorrectPlayerState(t *testing.T) {
 		Data: []byte(`{"from":"e8","to":"d8"}`),
 	}
 
-	err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err != nil && err.Error() == "record not found" {
 		t.Log("Successfully verified it looks for the current player's state")
@@ -245,7 +245,7 @@ func TestGenericHandleMove_BoundaryMove(t *testing.T) {
 		Data: []byte(`{"from":"h8","to":"h7"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err != nil {
 		t.Fatalf("Failed move on board boundary: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestGenericHandleMove_UnsupportedPiece(t *testing.T) {
 		Data: []byte(`{"from":"e2","to":"e3"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("Expected error for unsupported piece type 'X'")
@@ -284,7 +284,7 @@ func TestGenericHandleMove_UpdatesFEN(t *testing.T) {
 		Data:            []byte(`{"from":"e2","to":"e3"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestGenericHandleMove_RookBlocked(t *testing.T) {
 		Data: []byte(`{"from":"e1","to":"e3"}`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 	if err == nil {
 		t.Fatal("Expected error: Rook cannot jump over the pawn at e2")
@@ -373,7 +373,7 @@ func TestGenericHandleMove_WhitePinnedPieces(t *testing.T) {
 				}`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 		if err == nil {
 			t.Fatalf("expected pin move to fail")
@@ -416,7 +416,7 @@ func TestGenericHandleMove_WhiteCastling(t *testing.T) {
                 }`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 		if err != nil {
 			t.Fatalf("case %d: unexpected castling error: %v", i, err)
@@ -464,7 +464,7 @@ func TestGenericHandleMove_BlackCastling(t *testing.T) {
                 }`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 
 		if err != nil {
 			t.Fatalf("case %d: unexpected castling error: %v", i, err)
@@ -542,7 +542,7 @@ func TestGenericHandleMove_InvalidCastling(t *testing.T) {
 			Data: []byte(`{"from":"` + testCase.from + `","to":"` + testCase.to + `"}`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 		if err == nil {
 			t.Fatalf("expected castling move to fail for White")
 		}
@@ -557,7 +557,7 @@ func TestGenericHandleMove_InvalidCastling(t *testing.T) {
 			Data: []byte(`{"from":"` + testCase.from + `","to":"` + testCase.to + `"}`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 		if err == nil {
 			t.Fatalf("expected castling move to fail for Black")
 		}
@@ -623,7 +623,7 @@ func TestGenericHandleMove_EnPassant(t *testing.T) {
 			Data: []byte(`{"from":"` + testCase.from + `","to":"` + testCase.to + `"}`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 		if err != nil {
 			t.Fatalf("unexpected en passant error for White: %v", err)
 		}
@@ -644,7 +644,7 @@ func TestGenericHandleMove_EnPassant(t *testing.T) {
 			Data: []byte(`{"from":"` + testCase.from + `","to":"` + testCase.to + `"}`),
 		}
 
-		err := utils.GenericHandleMove(&newGame, &playerGameState, &opponentGameState, &message)
+		err := utils.GenericHandleMove(&newGame, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 		if err != nil {
 			t.Fatalf("unexpected en passant error for Black: %v", err)
 		}
@@ -667,7 +667,7 @@ func TestGenericHandleMove_SingleCheck(t *testing.T) {
         }`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err != nil {
 		t.Fatalf("Expected move d2->e3 to legally block the check, but got error: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestGenericHandleMove_SingleCheck(t *testing.T) {
         }`),
 	}
 
-	err = utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err = utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err == nil {
 		t.Fatalf("Expected move d2->c3 to fail because it ignores the check, but it was allowed")
 	}
@@ -697,7 +697,7 @@ func TestGenericHandleMove_DoubleCheck(t *testing.T) {
         }`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err == nil {
 		t.Fatalf("Expected Knight move to fail due to double check rules, but no error was thrown")
 	}
@@ -713,7 +713,7 @@ func TestGenericHandleMove_AbsolutePin(t *testing.T) {
         }`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &illegalMessage)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &illegalMessage)
 	if err == nil {
 		t.Fatalf("Expected Bishop move to b4 to fail because it breaks an absolute pin, but it was allowed")
 	}
@@ -728,7 +728,7 @@ func TestGenericHandleMove_AbsolutePin(t *testing.T) {
         }`),
 	}
 
-	err = utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &legalMessage)
+	err = utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &legalMessage)
 	if err != nil {
 		t.Fatalf("Expected Bishop move to d4 to be legal along the pin line, but got error: %v", err)
 	}
@@ -744,7 +744,7 @@ func TestGenericHandleMove_PinAndCheckConflict(t *testing.T) {
         }`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err == nil {
 		t.Fatalf("Expected Rook capture on e8 to fail because the Rook is absolutely pinned by the a6 Bishop")
 	}
@@ -759,7 +759,7 @@ func TestGenericHandleMove_RookSameAxisPin(t *testing.T) {
             "to": "a3"
         }`),
 	}
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &illegalMessage)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &illegalMessage)
 	if err == nil {
 		t.Fatalf("Expected Rook move to a3 to fail because it leaves the vertical pin line")
 	}
@@ -773,7 +773,7 @@ func TestGenericHandleMove_RookSameAxisPin(t *testing.T) {
             "to": "e6"
         }`),
 	}
-	err = utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &legalMessage)
+	err = utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &legalMessage)
 	if err != nil {
 		t.Fatalf("Expected Rook move to e6 to be valid since it stays on the pin line, got: %v", err)
 	}
@@ -789,7 +789,7 @@ func TestGenericHandleMove_EnPassantDiscoveredCheck(t *testing.T) {
         }`),
 	}
 
-	err := utils.GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+	err := utils.GenericHandleMove(&game, &models.GameMove{}, &playerGameState, &opponentGameState, &message)
 	if err == nil {
 		t.Fatalf("Expected En Passant to fail because removing both pawns exposes the White King to a discovered horizontal check from the a5 Rook")
 	}

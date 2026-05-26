@@ -289,7 +289,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		message.EnpassantSquare = opponentGameState.Enpassant
 		message.Status = "failed"
 
-		moveError := GenericHandleMove(&game, &playerGameState, &opponentGameState, &message)
+		gameMove := models.GameMove{}
+
+		moveError := GenericHandleMove(&game, &gameMove, &playerGameState, &opponentGameState, &message)
 
 		if moveError != nil {
 			log.Println("Invalid Move Error: ", moveError)
@@ -335,6 +337,12 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
+		if err := db.DB.Create(&gameMove).Error; err != nil {
+			log.Println(err.Error())
+
+			continue
+		}
+
 		if game.PlayerTurn == 1 {
 
 			UpdateWatch(game.ID, time.Duration(game.Player1RemainingTime)*time.Millisecond)
@@ -355,6 +363,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			if mateErr != nil {
 				log.Printf("Error while getting the check mate status: %s", mateErr.Error())
+
+				continue
 			}
 
 			if isMate {
@@ -364,7 +374,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					Type:   "checkmate",
 					Board:  game.Board,
 					Status: "win",
-					Data: message.Data,
+					Data:   message.Data,
 				}
 
 				msg, err := json.Marshal(checkMateMessage)
@@ -402,6 +412,63 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				game.WinnerID = &playerID
 				game.Status = "finished"
 				//TODO calutate the points awarded and deducted here
+
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				continue
+			}
+
+			isDraw, drawErr := isDraw(opponentID, game, playerGameState, opponentGameState)
+
+			if drawErr != nil {
+				log.Printf("Error while getting the draw status: %s", drawErr.Error())
+
+				continue
+			}
+
+			if isDraw {
+				drawMessage := Message{
+					GameID: int(game.ID),
+					Type:   "game_over",
+					Board:  game.Board,
+					Status: "draw",
+					Data:   message.Data,
+				}
+
+				msg, err := json.Marshal(drawMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+				game.WinnerID = &playerID
+				game.Status = "finished"
 
 				if err := db.DB.Save(&game).Error; err != nil {
 					log.Println(err.Error())

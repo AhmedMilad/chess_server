@@ -396,7 +396,7 @@ func GetBoardFromFenNotation(fenNotation string) (*[8][8]string, error) {
 	return &board, nil
 }
 
-func GenericHandleMove(game *models.Game, playerGameState, opponentGameState *models.GameState, message *Message) error {
+func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameState, opponentGameState *models.GameState, message *Message) error {
 	var moveData struct {
 		From string `json:"from"`
 		To   string `json:"to"`
@@ -540,12 +540,15 @@ func GenericHandleMove(game *models.Game, playerGameState, opponentGameState *mo
 	game.Board = *newBoardNotation
 	graceLagTime := int64(300)
 	curTimeStamp := time.Now().UnixMilli()
+	playerID := game.Player1ID
+	var moveTime int64
 
 	if game.PlayerTurn == 1 {
 		timeTaken := curTimeStamp - game.Player1LastMoveAt
 		timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
 
 		game.Player1RemainingTime = int64(math.Max(0, float64(game.Player1RemainingTime-timeSpent)))
+		moveTime = game.Player1RemainingTime
 
 		game.PlayerTurn = 2
 	} else {
@@ -553,7 +556,9 @@ func GenericHandleMove(game *models.Game, playerGameState, opponentGameState *mo
 		timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
 
 		game.Player2RemainingTime = int64(math.Max(0, float64(game.Player2RemainingTime-timeSpent)))
+		moveTime = game.Player2RemainingTime
 		game.PlayerTurn = 1
+		playerID = game.Player2ID
 	}
 
 	game.Player1LastMoveAt = curTimeStamp
@@ -562,6 +567,13 @@ func GenericHandleMove(game *models.Game, playerGameState, opponentGameState *mo
 	message.Turn = game.PlayerTurn
 	message.EnpassantSquare = playerGameState.Enpassant
 	message.Status = "ok"
+
+	gameMove.PlayerID = playerID
+	gameMove.From = moveData.From
+	gameMove.To = moveData.To
+	gameMove.GameID = game.ID
+	gameMove.Board = game.Board
+	gameMove.MoveTime = moveTime
 
 	return nil
 }
@@ -2217,6 +2229,117 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					}
 					return false, nil
 
+				}
+
+			default:
+				return false, errors.New("Invalid piece")
+			}
+		}
+	}
+
+	return true, nil
+}
+
+func isDraw(playerID uint, game models.Game, playerGameState, opponentGameState models.GameState) (bool, error) {
+
+	type PositionCount struct {
+		Count int64 `gorm:"column:count"`
+	}
+
+	var result PositionCount
+
+	err := db.DB.Raw(`
+		SELECT COUNT(*) as count 
+		FROM game_moves 
+		WHERE game_id = ? 
+		GROUP BY board 
+		ORDER BY count DESC 
+		LIMIT 1
+	`, game.ID).Scan(&result).Error
+
+	if err != nil {
+		return false, err
+	}
+
+	// check position repetition
+	if (result != PositionCount{}) && result.Count >= 3 {
+		return true, nil
+	}
+
+	// check for stalemate
+	isWhite := (playerID == game.Player1ID)
+
+	board, err := GetBoardFromFenNotation(game.Board)
+
+	if err != nil {
+		return false, err
+	}
+
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			piece := board[y][x]
+
+			if piece == " " || (isWhite != (strings.ToUpper(piece) == piece)) {
+				continue
+			}
+
+			pn := strings.ToLower(piece)
+
+			switch pn {
+			case "p":
+
+				moves := getPawnValidMoves(isWhite, x, y, opponentGameState.Enpassant, board)
+
+				if len(moves) > 0 {
+					return false, nil
+				}
+
+			case "q":
+				moves := make([][]int, 0)
+
+				moves = append(moves, getVerticalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getHorizontalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getDiagonalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getAntiDiagonalValidMoves(isWhite, x, y, board)...)
+
+				if len(moves) > 0 {
+					return false, nil
+				}
+
+			case "b":
+				moves := make([][]int, 0)
+
+				moves = append(moves, getDiagonalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getAntiDiagonalValidMoves(isWhite, x, y, board)...)
+
+				if len(moves) > 0 {
+					return false, nil
+				}
+
+			case "r":
+				moves := make([][]int, 0)
+
+				moves = append(moves, getVerticalValidMoves(isWhite, x, y, board)...)
+				moves = append(moves, getHorizontalValidMoves(isWhite, x, y, board)...)
+
+				if len(moves) > 0 {
+					return false, nil
+				}
+
+			case "k":
+
+				moves := getKingValidMoves(isWhite, x, y, playerGameState.CanLongCastle, playerGameState.CanKingSideCastle, board)
+
+				if len(moves) > 0 {
+					return false, nil
+				}
+
+			case "n":
+
+				moves := getKnightValidMoves(isWhite, x, y, board)
+
+				if len(moves) > 0 {
+					return false, nil
 				}
 
 			default:
