@@ -97,7 +97,12 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 
 	if game.PlayerTurn == 1 {
 
-		calculatedTime := game.Player1RemainingTime - curTimeStamp + game.Player1LastMoveAt
+		calculatedTime := game.Player1RemainingTime
+
+		if game.Status == "ongoing" {
+			calculatedTime = game.Player1RemainingTime - curTimeStamp + game.Player1LastMoveAt
+
+		}
 
 		if playerID == game.Player1ID {
 			myTime = calculatedTime
@@ -107,7 +112,11 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		}
 
 	} else {
-		calculatedTime := game.Player2RemainingTime - curTimeStamp + game.Player2LastMoveAt
+		calculatedTime := game.Player2RemainingTime
+		if game.Status == "ongoing" {
+
+			calculatedTime = game.Player2RemainingTime - curTimeStamp + game.Player2LastMoveAt
+		}
 
 		if playerID == game.Player1ID {
 			opponentTime = calculatedTime
@@ -124,6 +133,45 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		opponentTime = 0
 	}
 
+	status := "ok"
+
+	if game.Status == "draw" {
+		status = "draw"
+	}
+
+	if game.Status == "finished" {
+		if *game.WinnerID == playerID {
+			status = "win"
+		} else {
+			status = "defeat"
+		}
+	}
+
+	var gameMove models.GameMove
+
+	db.DB.Where("game_id = ?", game.ID).Last(&gameMove)
+
+	type moveData struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	var data *moveData
+
+	if gameMove.From != "" && gameMove.To != "" {
+		data = &moveData{
+			From: gameMove.From,
+			To:   gameMove.To,
+		}
+	}
+
+	dataMsg, dataErr := json.Marshal(data)
+
+	if dataErr != nil {
+		log.Printf("could not marshal the data info and got the error: %s", err.Error())
+		return
+
+	}
+
 	message := Message{
 		Type:         "reconnect_game",
 		GameID:       gameId,
@@ -132,6 +180,8 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		Color:        color,
 		MyTime:       uint64(myTime),
 		OpponentTime: uint64(opponentTime),
+		Status:       status,
+		Data:         dataMsg,
 	}
 
 	oppoonetPlayerID := game.Player2ID
@@ -369,12 +419,22 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			if isMate {
 
+				t1 := game.Player1RemainingTime
+				t2 := game.Player2RemainingTime
+
+				if playerID == game.Player2ID {
+					t1 = game.Player2RemainingTime
+					t2 = game.Player1RemainingTime
+				}
+
 				checkMateMessage := Message{
-					GameID: int(game.ID),
-					Type:   "checkmate",
-					Board:  game.Board,
-					Status: "win",
-					Data:   message.Data,
+					GameID:       int(game.ID),
+					Type:         "checkmate",
+					Board:        game.Board,
+					Status:       "win",
+					Data:         message.Data,
+					MyTime:       uint64(t1),
+					OpponentTime: uint64(t2),
 				}
 
 				msg, err := json.Marshal(checkMateMessage)
@@ -393,6 +453,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				checkMateMessage.Status = "defeat"
+
+				checkMateMessage.MyTime = uint64(t2)
+				checkMateMessage.OpponentTime = uint64(t1)
 
 				msg, err = json.Marshal(checkMateMessage)
 
@@ -431,12 +494,28 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			}
 
 			if isDraw {
+
+				t1 := game.Player1RemainingTime
+				t2 := game.Player2RemainingTime
+
+				if playerID == game.Player2ID {
+					t1 = game.Player2RemainingTime
+					t2 = game.Player1RemainingTime
+				}
+
+				if playerID == game.Player2ID {
+					t1 = game.Player2RemainingTime
+					t2 = game.Player1RemainingTime
+				}
+
 				drawMessage := Message{
-					GameID: int(game.ID),
-					Type:   "game_over",
-					Board:  game.Board,
-					Status: "draw",
-					Data:   message.Data,
+					GameID:       int(game.ID),
+					Type:         "draw",
+					Board:        game.Board,
+					Status:       "draw",
+					Data:         message.Data,
+					MyTime:       uint64(t1),
+					OpponentTime: uint64(t2),
 				}
 
 				msg, err := json.Marshal(drawMessage)
@@ -454,6 +533,11 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					PlayerMutex.Unlock()
 				}
 
+				drawMessage.MyTime = uint64(t2)
+				drawMessage.OpponentTime = uint64(t1)
+
+				msg, err = json.Marshal(drawMessage)
+
 				if err != nil {
 
 					log.Println("Invalid message")
@@ -468,7 +552,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				game.WinnerID = &playerID
-				game.Status = "finished"
+				game.Status = "draw"
 
 				if err := db.DB.Save(&game).Error; err != nil {
 					log.Println(err.Error())
