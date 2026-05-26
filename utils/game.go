@@ -1012,6 +1012,9 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, canLongCastle bool, can
 	canCastle = canCastle && isDiagonalSafe(isWhite, xPos, yPos, board)
 	canCastle = canCastle && isAntiDiagonalSafe(isWhite, xPos, yPos, board)
 
+	piece := board[yPos][xPos]
+	board[yPos][xPos] = " " //temporary piece removal
+
 	if canKingSideCastle && xPos+1 <= 7 {
 
 		isSafeMove := isVerticalSafe(isWhite, xPos+1, yPos, board)
@@ -1071,12 +1074,22 @@ func getKingValidMoves(isWhite bool, xPos int, yPos int, canLongCastle bool, can
 		}
 	}
 
+	board[yPos][xPos] = piece
+
 	return validMoves
 }
 
 func isVerticalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"r", "q", "k"}
+		} else {
+			pieces = []string{"r", "q"}
+		}
+
 		deltaY := yPos + i
 
 		if deltaY > 7 {
@@ -1088,7 +1101,7 @@ func isVerticalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 		if targetSquare != " " {
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 
-				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 
@@ -1100,6 +1113,14 @@ func isVerticalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 	}
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"r", "q", "k"}
+		} else {
+			pieces = []string{"r", "q"}
+		}
+
 		deltaY := yPos - i
 
 		if deltaY < 0 {
@@ -1110,7 +1131,7 @@ func isVerticalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 		if targetSquare != " " {
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 
-				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 
@@ -1127,6 +1148,14 @@ func isVerticalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 func isHorizontalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"r", "q", "k"}
+		} else {
+			pieces = []string{"r", "q"}
+		}
+
 		deltaX := xPos + i
 
 		if deltaX > 7 {
@@ -1138,7 +1167,7 @@ func isHorizontalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) boo
 		if targetSquare != " " {
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 
-				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 
@@ -1150,6 +1179,14 @@ func isHorizontalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) boo
 	}
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"r", "q", "k"}
+		} else {
+			pieces = []string{"r", "q"}
+		}
+
 		deltaX := xPos - i
 
 		if deltaX < 0 {
@@ -1161,7 +1198,7 @@ func isHorizontalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) boo
 		if targetSquare != " " {
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
 
-				if slices.Contains([]string{"r", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 
@@ -1178,6 +1215,14 @@ func isHorizontalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) boo
 func isDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"b", "q", "p", "k"}
+		} else {
+			pieces = []string{"b", "q"}
+		}
+
 		deltaX := xPos + i
 
 		if deltaX > 7 {
@@ -1195,7 +1240,7 @@ func isDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 		if targetSquare != " " {
 
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 			}
@@ -1206,6 +1251,14 @@ func isDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 	}
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"b", "q", "p", "k"}
+		} else {
+			pieces = []string{"b", "q"}
+		}
+
 		deltaX := xPos - i
 
 		if deltaX < 0 {
@@ -1222,7 +1275,7 @@ func isDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 
 		if targetSquare != " " {
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 			}
@@ -1237,6 +1290,14 @@ func isDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool 
 func isAntiDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) bool {
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"b", "q", "p", "k"}
+		} else {
+			pieces = []string{"b", "q"}
+		}
+
 		deltaX := xPos + i
 
 		if deltaX > 7 {
@@ -1254,7 +1315,7 @@ func isAntiDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) b
 		if targetSquare != " " {
 
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 			}
@@ -1265,6 +1326,14 @@ func isAntiDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) b
 	}
 
 	for i := 1; i < 8; i++ {
+		pieces := []string{}
+
+		if i == 1 {
+			pieces = []string{"b", "q", "p", "k"}
+		} else {
+			pieces = []string{"b", "q"}
+		}
+
 		deltaX := xPos - i
 
 		if deltaX < 0 {
@@ -1281,7 +1350,7 @@ func isAntiDiagonalSafe(isWhite bool, xPos int, yPos int, board *[8][8]string) b
 
 		if targetSquare != " " {
 			if isWhite != (strings.ToUpper(targetSquare) == targetSquare) {
-				if slices.Contains([]string{"b", "q"}, strings.ToLower(targetSquare)) {
+				if slices.Contains(pieces, strings.ToLower(targetSquare)) {
 					return false
 				}
 			}
