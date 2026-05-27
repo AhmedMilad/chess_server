@@ -356,6 +356,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			if ok {
 				message.CanKingSideCastle = playerGameState.CanKingSideCastle
 				message.CangLongCastle = playerGameState.CanLongCastle
+				message.Data = nil
 
 				msg, err = json.Marshal(message)
 
