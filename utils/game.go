@@ -444,7 +444,7 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 	switch piece {
 	case "p":
 
-		err := movePawn(false, fromX, fromY, toX, toY, playerGameState, opponentGameState, board)
+		err := movePawn(false, fromX, fromY, toX, toY, playerGameState, opponentGameState, board, message.PromoteTo)
 
 		if err != nil {
 			return err
@@ -488,7 +488,7 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 
 	case "P":
 
-		err := movePawn(true, fromX, fromY, toX, toY, playerGameState, opponentGameState, board)
+		err := movePawn(true, fromX, fromY, toX, toY, playerGameState, opponentGameState, board, message.PromoteTo)
 
 		if err != nil {
 			return err
@@ -1499,7 +1499,7 @@ func validateMove(isWhite bool, board *[8][8]string) error {
 
 }
 
-func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, opponentGameState *models.GameState, board *[8][8]string) error {
+func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, opponentGameState *models.GameState, board *[8][8]string, promoteTo string) error {
 
 	if !isValidMove(isWhite, toX, toY, getPawnValidMoves(isWhite, fromX, fromY, opponentGameState.Enpassant, board), board) {
 		return errors.New("Invalid move")
@@ -1534,7 +1534,35 @@ func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
 
-	return validateMove(isWhite, board)
+	err := validateMove(isWhite, board)
+
+	if err != nil {
+
+		return err
+	}
+
+	if isWhite {
+		if toY == 0 {
+			if !slices.Contains([]string{"Q", "R", "B", "N"}, promoteTo) {
+
+				return errors.New("Invalid promotion piece")
+			}
+
+			board[toY][toX] = promoteTo
+		}
+	} else {
+		if toY == 7 {
+			if !slices.Contains([]string{"q", "r", "b", "n"}, promoteTo) {
+
+				return errors.New("Invalid promotion piece")
+			}
+
+			board[toY][toX] = promoteTo
+
+		}
+	}
+
+	return nil
 }
 
 func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
@@ -2087,7 +2115,7 @@ func getCheckMoves(isWhite bool, board *[8][8]string) [][]int {
 	return checkMoves
 }
 
-func isCheckMate(playerID int, playerGameState, opponentGameState models.GameState, game models.Game) (bool, error) {
+func isCheckMate(playerID int, playerGameState, opponentGameState models.GameState, game models.Game, promoteTo string) (bool, error) {
 
 	isWhite := (playerID == int(game.Player1ID)) //player1 always white
 	board, err := GetBoardFromFenNotation(game.Board)
@@ -2124,7 +2152,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					playerStateCopy := playerGameState
 					opponentStateCopy := opponentGameState
 
-					err := movePawn(isWhite, x, y, v[1], v[0], &playerStateCopy, &opponentStateCopy, &boardCopy)
+					err := movePawn(isWhite, x, y, v[1], v[0], &playerStateCopy, &opponentStateCopy, &boardCopy, promoteTo)
 
 					if err != nil {
 						continue

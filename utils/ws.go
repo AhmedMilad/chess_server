@@ -30,6 +30,7 @@ type Message struct {
 	Opponent          Player          `json:"opponent"`
 	MyTime            uint64          `json:"my_time"`
 	OpponentTime      uint64          `json:"opponent_time"`
+	PromoteTo         string          `json:"promote_to"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -409,7 +410,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		PlayerMutex.Unlock()
 
 		if playerOk && opponentOk {
-			isMate, mateErr := isCheckMate(int(opponentID), playerGameState, opponentGameState, game)
+			isMate, mateErr := isCheckMate(int(opponentID), playerGameState, opponentGameState, game, message.PromoteTo)
 
 			if mateErr != nil {
 				log.Printf("Error while getting the check mate status: %s", mateErr.Error())
