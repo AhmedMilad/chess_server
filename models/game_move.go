@@ -14,6 +14,7 @@ type GameMove struct {
 	To        string `gorm:"type:varchar(50);default:'pending'"`
 	Board     string `gorm:"size:255;index:idx_game_board"`
 	MoveTime  int64  `gorm:"not null"`
+	Notation  string `gorm:"size:14;not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

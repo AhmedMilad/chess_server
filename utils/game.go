@@ -444,28 +444,28 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 	switch piece {
 	case "p":
 
-		err := movePawn(false, fromX, fromY, toX, toY, playerGameState, opponentGameState, board, message.PromoteTo)
+		err := movePawn(false, fromX, fromY, toX, toY, playerGameState, opponentGameState, gameMove, board, message.PromoteTo)
 
 		if err != nil {
 			return err
 		}
 
 	case "q":
-		err := moveQueen(false, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveQueen(false, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "b":
-		err := moveBishop(false, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveBishop(false, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "r":
-		err := moveRook(false, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveRook(false, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
@@ -473,14 +473,14 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 
 	case "k":
 
-		err := moveking(false, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveking(false, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "n":
-		err := moveKnight(false, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveKnight(false, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
@@ -488,41 +488,41 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 
 	case "P":
 
-		err := movePawn(true, fromX, fromY, toX, toY, playerGameState, opponentGameState, board, message.PromoteTo)
+		err := movePawn(true, fromX, fromY, toX, toY, playerGameState, opponentGameState, gameMove, board, message.PromoteTo)
 
 		if err != nil {
 			return err
 		}
 
 	case "Q":
-		err := moveQueen(true, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveQueen(true, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "B":
-		err := moveBishop(true, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveBishop(true, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 	case "R":
-		err := moveRook(true, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveRook(true, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "K":
-		err := moveking(true, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveking(true, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
 		}
 
 	case "N":
-		err := moveKnight(true, fromX, fromY, toX, toY, playerGameState, board)
+		err := moveKnight(true, fromX, fromY, toX, toY, playerGameState, gameMove, board)
 
 		if err != nil {
 			return err
@@ -1499,7 +1499,7 @@ func validateMove(isWhite bool, board *[8][8]string) error {
 
 }
 
-func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, opponentGameState *models.GameState, board *[8][8]string, promoteTo string) error {
+func movePawn(isWhite bool, fromX, fromY, toX, toY int, gameState, opponentGameState *models.GameState, gameMove *models.GameMove, board *[8][8]string, promoteTo string) error {
 
 	if !isValidMove(isWhite, toX, toY, getPawnValidMoves(isWhite, fromX, fromY, opponentGameState.Enpassant, board), board) {
 		return errors.New("Invalid move")
@@ -1509,6 +1509,14 @@ func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	gameState.Enpassant = " "
 
 	piece := board[fromY][fromX]
+
+	notation, notationErr := getPawnMoveNotation(fromX, fromY, toX, toY, opponentGameState.Enpassant, promoteTo, board)
+
+	if notationErr != nil {
+		return notationErr
+	}
+
+	gameMove.Notation = notation
 
 	if diff == 2 {
 		// generated en passent move
@@ -1565,7 +1573,7 @@ func movePawn(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	return nil
 }
 
-func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
+func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, gameMove *models.GameMove, board *[8][8]string) error {
 
 	found := false
 
@@ -1648,12 +1656,38 @@ func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 
 		dir *= -1
 
+		isLongCastle := false
+		isKingSideCastle := false
+
+		if math.Abs(float64(fromX-rookXPos)) > 3 {
+			isLongCastle = true
+		} else {
+			isKingSideCastle = true
+		}
+
+		note, noteErr := getKingMoveNotation(fromX, fromY, toX, toY, isKingSideCastle, isLongCastle, board)
+
+		if noteErr != nil {
+			return noteErr
+		}
+
+		gameMove.Notation = note
+
 		board[fromY][fromX] = " "
 		board[fromY][rookXPos] = " "
 		board[toY][toX] = piece
 		board[toY][toX+1*dir] = rook
 
 	} else {
+
+		note, noteErr := getKingMoveNotation(fromX, fromY, toX, toY, false, false, board)
+
+		if noteErr != nil {
+			return noteErr
+		}
+
+		gameMove.Notation = note
+
 		board[fromY][fromX] = " "
 		board[toY][toX] = piece
 
@@ -1662,13 +1696,21 @@ func moveking(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	return nil
 }
 
-func moveKnight(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
+func moveKnight(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, gameMove *models.GameMove, board *[8][8]string) error {
 
 	if !isValidMove(isWhite, toX, toY, getKnightValidMoves(isWhite, fromX, fromY, board), board) {
 
 		return errors.New("Invalid move")
 	}
 	gameState.Enpassant = " "
+
+	notation, err := getKnightMoveNotation(fromX, fromY, toX, toY, board)
+
+	if err != nil {
+		return err
+	}
+
+	gameMove.Notation = notation
 
 	piece := board[fromY][fromX]
 	board[fromY][fromX] = " "
@@ -1677,7 +1719,7 @@ func moveKnight(isWhite bool, fromX int, fromY int, toX int, toY int, gameState 
 	return validateMove(isWhite, board)
 }
 
-func moveQueen(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
+func moveQueen(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, gameMove *models.GameMove, board *[8][8]string) error {
 	validMoves := make([][]int, 0)
 
 	validMoves = append(validMoves, getVerticalValidMoves(isWhite, fromX, fromY, board)...)
@@ -1692,6 +1734,14 @@ func moveQueen(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *
 
 	gameState.Enpassant = " "
 
+	notation, err := getQueenMoveNotation(fromX, fromY, toX, toY, board)
+
+	if err != nil {
+		return err
+	}
+
+	gameMove.Notation = notation
+
 	piece := board[fromY][fromX]
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
@@ -1699,7 +1749,7 @@ func moveQueen(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *
 	return validateMove(isWhite, board)
 }
 
-func moveBishop(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
+func moveBishop(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, gameMove *models.GameMove, board *[8][8]string) error {
 	validMoves := make([][]int, 0)
 
 	validMoves = append(validMoves, getDiagonalValidMoves(isWhite, fromX, fromY, board)...)
@@ -1712,6 +1762,14 @@ func moveBishop(isWhite bool, fromX int, fromY int, toX int, toY int, gameState 
 
 	gameState.Enpassant = " "
 
+	notation, err := getBishopMoveNotation(fromX, fromY, toX, toY, board)
+
+	if err != nil {
+		return err
+	}
+
+	gameMove.Notation = notation
+
 	piece := board[fromY][fromX]
 	board[fromY][fromX] = " "
 	board[toY][toX] = piece
@@ -1719,7 +1777,7 @@ func moveBishop(isWhite bool, fromX int, fromY int, toX int, toY int, gameState 
 	return validateMove(isWhite, board)
 }
 
-func moveRook(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, board *[8][8]string) error {
+func moveRook(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *models.GameState, gameMove *models.GameMove, board *[8][8]string) error {
 	validMoves := make([][]int, 0)
 
 	validMoves = append(validMoves, getVerticalValidMoves(isWhite, fromX, fromY, board)...)
@@ -1738,6 +1796,14 @@ func moveRook(isWhite bool, fromX int, fromY int, toX int, toY int, gameState *m
 	}
 
 	gameState.Enpassant = " "
+
+	notation, err := getRookMoveNotation(fromX, fromY, toX, toY, board)
+
+	if err != nil {
+		return err
+	}
+
+	gameMove.Notation = notation
 
 	piece := board[fromY][fromX]
 	board[fromY][fromX] = " "
@@ -2152,7 +2218,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					playerStateCopy := playerGameState
 					opponentStateCopy := opponentGameState
 
-					err := movePawn(isWhite, x, y, v[1], v[0], &playerStateCopy, &opponentStateCopy, &boardCopy, promoteTo)
+					err := movePawn(isWhite, x, y, v[1], v[0], &playerStateCopy, &opponentStateCopy, &models.GameMove{}, &boardCopy, promoteTo)
 
 					if err != nil {
 						continue
@@ -2174,7 +2240,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					boardCopy := *board
 					playerStateCopy := playerGameState
 
-					err := moveQueen(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+					err := moveQueen(isWhite, x, y, v[1], v[0], &playerStateCopy, &models.GameMove{}, &boardCopy)
 
 					if err != nil {
 						continue
@@ -2194,7 +2260,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					boardCopy := *board
 					playerStateCopy := playerGameState
 
-					err := moveBishop(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+					err := moveBishop(isWhite, x, y, v[1], v[0], &playerStateCopy, &models.GameMove{}, &boardCopy)
 
 					if err != nil {
 						continue
@@ -2214,7 +2280,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					boardCopy := *board
 					playerStateCopy := playerGameState
 
-					err := moveRook(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+					err := moveRook(isWhite, x, y, v[1], v[0], &playerStateCopy, &models.GameMove{}, &boardCopy)
 
 					if err != nil {
 						continue
@@ -2232,7 +2298,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					boardCopy := *board
 					playerStateCopy := playerGameState
 
-					err := moveking(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+					err := moveking(isWhite, x, y, v[1], v[0], &playerStateCopy, &models.GameMove{}, &boardCopy)
 
 					if err != nil {
 						continue
@@ -2250,7 +2316,7 @@ func isCheckMate(playerID int, playerGameState, opponentGameState models.GameSta
 					boardCopy := *board
 					playerStateCopy := playerGameState
 
-					err := moveKnight(isWhite, x, y, v[1], v[0], &playerStateCopy, &boardCopy)
+					err := moveKnight(isWhite, x, y, v[1], v[0], &playerStateCopy, &models.GameMove{}, &boardCopy)
 
 					if err != nil {
 						continue
@@ -2377,4 +2443,692 @@ func isDraw(playerID uint, game models.Game, playerGameState, opponentGameState 
 	}
 
 	return true, nil
+}
+
+func getPawnMoveNotation(fromX, fromY, toX, toY int, enpassantSquare, promoteTo string, board *[8][8]string) (string, error) {
+
+	piece := board[fromY][fromX]
+
+	if strings.ToLower(piece) != "p" {
+		return "", errors.New("Invalid piece while getting pawn move notation")
+	}
+
+	isWhite := false
+	notation := ""
+
+	if piece == strings.ToUpper(piece) {
+		isWhite = true
+	}
+
+	dir := -1
+
+	if isWhite {
+		dir = 1
+	}
+
+	if dir+toY < 0 || dir+toY > 7 {
+		return "", errors.New("Invalid y axis while getting the pawn notation")
+	}
+
+	cnt := 0
+
+	if fromX != toX {
+		if toX+1 <= 7 {
+			if board[dir+toY][toX+1] == piece {
+				cnt++
+			}
+		}
+
+		if toX-1 >= 0 {
+			if board[dir+toY][toX-1] == piece {
+				cnt++
+			}
+		}
+	}
+
+	// if found two pawns hitting the same target square
+	if cnt == 2 {
+		originNote, err := IndexToFenNotation(fromY, fromX)
+
+		if err != nil {
+			return "", errors.New("Invalid (from) coordinates")
+		}
+
+		notation += string(originNote[0])
+	}
+
+	if board[toY][toX] != " " {
+		notation += "x"
+	}
+
+	if strings.TrimSpace(enpassantSquare) != "" {
+		coordinates, err := getMoveNotationIndex(enpassantSquare)
+
+		if err != nil {
+			return "", errors.New("Invalid enpassant square")
+
+		}
+
+		if toY == coordinates[0]+dir*-1 && toX == coordinates[1] {
+			notation += "x"
+
+		}
+	}
+
+	destNote, err := IndexToFenNotation(toY, toX)
+
+	if err != nil {
+		return "", errors.New("Invalid (from) coordinates")
+	}
+
+	notation += destNote
+
+	if strings.TrimSpace(promoteTo) != "" {
+		notation += "=" + strings.ToUpper(promoteTo)
+	}
+
+	return notation, nil
+}
+
+func getKingMoveNotation(fromX, fromY, toX, toY int, isKingSideCastle, isLongCastle bool, board *[8][8]string) (string, error) {
+
+	king := board[fromY][fromX]
+
+	if strings.ToLower(king) != "k" {
+		return "", errors.New("Invalid piece while getting king move notation")
+
+	}
+
+	if isKingSideCastle {
+		return "O-O", nil
+	}
+
+	if isLongCastle {
+		return "O-O-O", nil
+	}
+
+	notation := "K"
+
+	// is capture
+	if board[toY][toX] != " " {
+		notation += "x"
+	}
+
+	destNote, err := IndexToFenNotation(toY, toX)
+
+	if err != nil {
+		return "", errors.New("Invalid (from) coordinates")
+	}
+
+	notation += destNote
+
+	return notation, nil
+}
+
+func getKnightMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (string, error) {
+
+	knight := board[fromY][fromX]
+
+	if strings.ToLower(knight) != "n" {
+		return "", errors.New("Invalid piece while getting knight move notation")
+
+	}
+
+	notation := "N"
+
+	originNote, err := IndexToFenNotation(fromY, fromX)
+
+	if err != nil {
+		return "", errors.New("Invalid (from) coordinates")
+	}
+
+	destNote, err := IndexToFenNotation(toY, toX)
+
+	if err != nil {
+		return "", errors.New("Invalid (to) coordinates")
+	}
+
+	if board[toY][toX] != " " {
+		destNote = "x" + destNote
+	}
+
+	ranks := map[float64]int{}
+	files := map[float64]int{}
+
+	allMoves := [8][2]int{
+		{2, 1},
+		{2, -1},
+		{-2, 1},
+		{-2, -1},
+		{1, 2},
+		{1, -2},
+		{-1, 2},
+		{-1, -2},
+	}
+
+	found := 0
+
+	for _, move := range allMoves {
+		dy := float64(move[0] + toY)
+		dx := float64(move[1] + toX)
+
+		if math.Max(dx, dy) > 7 || math.Min(dx, dy) < 0 {
+			continue
+		}
+
+		if board[int(dy)][int(dx)] == knight {
+			files[dx]++
+			ranks[dy]++
+			found++ //use found for opposite position knights hitting the same square
+		}
+
+	}
+
+	if found > 1 || ranks[float64(fromY)] > 1 {
+		notation += string(originNote[0])
+	}
+
+	if files[float64(fromX)] > 1 {
+		notation += string(originNote[1])
+
+	}
+
+	return notation + destNote, nil
+}
+
+func getBishopMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (string, error) {
+
+	bishop := board[fromY][fromX]
+
+	if strings.ToLower(bishop) != "b" {
+		return "", errors.New("Invalid piece while getting bishop move notation")
+
+	}
+
+	notation := "B"
+
+	originNote, err := IndexToFenNotation(fromY, fromX)
+
+	if err != nil {
+		return "", errors.New("Invalid (from) coordinates")
+	}
+
+	destNote, err := IndexToFenNotation(toY, toX)
+
+	if err != nil {
+		return "", errors.New("Invalid (to) coordinates")
+	}
+
+	if board[toY][toX] != " " {
+		destNote = "x" + destNote
+	}
+
+	ranks := map[int]int{}
+	files := map[int]int{}
+
+	found := 0
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX + i
+		dy := toY + i
+
+		if dx > 7 || dy > 7 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == bishop {
+
+				files[dx]++
+				ranks[dy]++
+				found++
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX - i
+		dy := toY - i
+
+		if dx < 0 || dy < 0 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == bishop {
+
+				files[dx]++
+				ranks[dy]++
+				found++
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX + i
+		dy := toY - i
+
+		if dx > 7 || dy < 0 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == bishop {
+
+				files[dx]++
+				ranks[dy]++
+				found++
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX - i
+		dy := toY + i
+
+		if dx < 0 || dy > 7 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == bishop {
+
+				files[dx]++
+				ranks[dy]++
+				found++
+			}
+
+			break
+		}
+
+	}
+
+	if found > 1 || ranks[fromY] > 1 {
+		notation += string(originNote[0])
+	}
+
+	if files[fromX] > 1 {
+		notation += string(originNote[1])
+
+	}
+
+	return notation + destNote, nil
+}
+
+func getRookMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (string, error) {
+
+	rook := board[fromY][fromX]
+
+	if strings.ToLower(rook) != "r" {
+		return "", errors.New("Invalid piece while getting rook move notation")
+
+	}
+
+	notation := "R"
+
+	originNote, err := IndexToFenNotation(fromY, fromX)
+
+	if err != nil {
+		return "", errors.New("Invalid (from) coordinates")
+	}
+
+	destNote, err := IndexToFenNotation(toY, toX)
+
+	if err != nil {
+		return "", errors.New("Invalid (to) coordinates")
+	}
+
+	if board[toY][toX] != " " {
+		destNote = "x" + destNote
+	}
+
+	ranks := map[int]int{}
+	files := map[int]int{}
+
+	found := 0
+
+	for i := 1; i < 8; i++ {
+		dx := toX + i
+
+		if dx > 7 {
+			break
+		}
+
+		piece := board[toY][dx]
+
+		if piece != " " {
+
+			if piece == rook {
+				ranks[fromY]++
+				found++
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+		dx := toX - i
+
+		if dx < 0 {
+			break
+		}
+
+		piece := board[toY][dx]
+
+		if piece != " " {
+
+			if piece == rook {
+				ranks[fromY]++
+				found++
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+		dy := toY + i
+
+		if dy > 7 {
+			break
+		}
+
+		piece := board[dy][toX]
+
+		if piece != " " {
+
+			if piece == rook {
+				files[fromX]++
+				found++
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+		dy := toY - i
+
+		if dy < 0 {
+			break
+		}
+
+		piece := board[dy][toX]
+
+		if piece != " " {
+
+			if piece == rook {
+				files[fromX]++
+				found++
+			}
+
+			break
+		}
+	}
+
+	if found > 1 || ranks[fromY] > 1 {
+		notation += string(originNote[0])
+	}
+
+	if files[fromX] > 1 {
+		notation += string(originNote[1])
+
+	}
+
+	return notation + destNote, nil
+}
+
+func getQueenMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (string, error) {
+
+	queen := board[fromY][fromX]
+
+	if strings.ToLower(queen) != "q" {
+		return "", errors.New("Invalid piece while getting queen move notation")
+
+	}
+
+	notation := "Q"
+
+	originNote, err := IndexToFenNotation(fromY, fromX)
+
+	pos := [][2]int{}
+
+	if err != nil {
+		return "", errors.New("Invalid (from) coordinates")
+	}
+
+	destNote, err := IndexToFenNotation(toY, toX)
+
+	if err != nil {
+		return "", errors.New("Invalid (to) coordinates")
+	}
+
+	if board[toY][toX] != " " {
+		destNote = "x" + destNote
+	}
+
+	for i := 1; i < 8; i++ {
+		dx := toX + i
+
+		if dx > 7 {
+			break
+		}
+
+		piece := board[toY][dx]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{toY, dx})
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+		dx := toX - i
+
+		if dx < 0 {
+			break
+		}
+
+		piece := board[toY][dx]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{toY, dx})
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+		dy := toY + i
+
+		if dy > 7 {
+			break
+		}
+
+		piece := board[dy][toX]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{dy, toX})
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+		dy := toY - i
+
+		if dy < 0 {
+			break
+		}
+
+		piece := board[dy][toX]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{dy, toX})
+			}
+
+			break
+		}
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX + i
+		dy := toY + i
+
+		if dx > 7 || dy > 7 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{dy, dx})
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX - i
+		dy := toY - i
+
+		if dx < 0 || dy < 0 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{dy, dx})
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX + i
+		dy := toY - i
+
+		if dx > 7 || dy < 0 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{dy, dx})
+			}
+
+			break
+		}
+
+	}
+
+	for i := 1; i < 8; i++ {
+
+		dx := toX - i
+		dy := toY + i
+
+		if dx < 0 || dy > 7 {
+			break
+		}
+
+		piece := board[dy][dx]
+
+		if piece != " " {
+
+			if piece == queen {
+				pos = append(pos, [2]int{dy, dx})
+			}
+
+			break
+		}
+
+	}
+
+	isSameFile := false
+	isSameRank := false
+	isOnDiagonal := false
+
+	for _, p := range pos {
+
+		if p[0] == fromY && p[1] == fromX {
+			continue
+		}
+
+		if p[0] == fromY {
+			isSameRank = true
+		}
+
+		if p[1] == fromX {
+			isSameFile = true
+		}
+
+		if p[0] != fromY && p[1] != fromX {
+			isOnDiagonal = true
+		}
+
+	}
+
+	if isSameRank || isOnDiagonal {
+		notation += string(originNote[0])
+	}
+
+	if isSameFile {
+		notation += string(originNote[1])
+	}
+
+	return notation + destNote, nil
+
 }

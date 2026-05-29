@@ -424,6 +424,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				t1 := game.Player1RemainingTime
 				t2 := game.Player2RemainingTime
 
+				gameMove.Notation += "#"
+
+				if err := db.DB.Save(&gameMove).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
 				if playerID == game.Player2ID {
 					t1 = game.Player2RemainingTime
 					t2 = game.Player1RemainingTime
@@ -499,6 +507,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 				t1 := game.Player1RemainingTime
 				t2 := game.Player2RemainingTime
+
+				gameMove.Notation += " 1/2-1/2"
+
+				if err := db.DB.Save(&gameMove).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
 
 				if playerID == game.Player2ID {
 					t1 = game.Player2RemainingTime
