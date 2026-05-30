@@ -58,6 +58,11 @@ type Player struct {
 	UpperBoundRatingDiff int
 }
 
+type PlayerInfo struct {
+	UserName string `json:"username"`
+	Rating   string `json:"rating"`
+}
+
 func createGame(p1, p2 Player, gameTypeID uint) {
 
 	boardNotation, _ := GetFenNotation(Board)
@@ -120,26 +125,46 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 		PlayerMutex.Unlock()
 	}
 
+	var player1Rating models.UserGameRating
+	var player2Rating models.UserGameRating
+
+	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", p1.UserID, gameTypeID).First(&player1Rating)
+	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", p2.UserID, gameTypeID).First(&player2Rating)
+
 	player1Notification := Message{
 		Type:         startGame,
 		GameID:       int(game.ID),
-		Opponent:     p2,
 		Color:        "white",
 		Board:        *boardNotation,
 		Turn:         game.PlayerTurn,
 		MyTime:       uint64(gameTime),
 		OpponentTime: uint64(gameTime),
+		MyInfo: PlayerInfo{
+			UserName: player1Rating.User.UserName,
+			Rating:   strconv.FormatInt(int64(player1Rating.Rating), 10),
+		},
+		OpponentInfo: PlayerInfo{
+			UserName: player2Rating.User.UserName,
+			Rating:   strconv.FormatInt(int64(player2Rating.Rating), 10),
+		},
 	}
 
 	player2Notification := Message{
 		Type:         startGame,
 		GameID:       int(game.ID),
-		Opponent:     p1,
 		Color:        "black",
 		Board:        *boardNotation,
 		Turn:         game.PlayerTurn,
 		MyTime:       uint64(gameTime),
 		OpponentTime: uint64(gameTime),
+		MyInfo: PlayerInfo{
+			UserName: player2Rating.User.UserName,
+			Rating:   strconv.FormatInt(int64(player1Rating.Rating), 10),
+		},
+		OpponentInfo: PlayerInfo{
+			UserName: player1Rating.User.UserName,
+			Rating:   strconv.FormatInt(int64(player1Rating.Rating), 10),
+		},
 	}
 
 	player1Data, _ := json.Marshal(&player1Notification)

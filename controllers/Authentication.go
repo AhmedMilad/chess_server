@@ -24,7 +24,7 @@ func Register(c *gin.Context) {
 		return
 	}
 	var existingUser models.User
-	err := db.DB.Where("user_name = ? OR email = ?", payload.UserName, payload.Email).
+	err := db.DB.Where("username = ? OR email = ?", payload.UserName, payload.Email).
 		First(&existingUser).Error
 
 	if err == nil {
@@ -127,7 +127,7 @@ func Login(c *gin.Context) {
 	}
 
 	var user models.User
-	err := db.DB.Where("user_name = ?", payload.UserName).First(&user).Error
+	err := db.DB.Where("username = ?", payload.UserName).First(&user).Error
 
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{

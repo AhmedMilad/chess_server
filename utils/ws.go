@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,7 +28,8 @@ type Message struct {
 	CangLongCastle    bool            `json:"can_long_castle"`
 	CanKingSideCastle bool            `json:"can_king_side_castle"`
 	EnpassantSquare   string          `json:"enpassant_square"`
-	Opponent          Player          `json:"opponent"`
+	OpponentInfo      PlayerInfo      `json:"opponent_info"`
+	MyInfo            PlayerInfo      `json:"my_info"`
 	MyTime            uint64          `json:"my_time"`
 	OpponentTime      uint64          `json:"opponent_time"`
 	MoveNotation      string          `json:"move_notation"`
@@ -89,11 +91,13 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 
 	myTime := game.Player1RemainingTime
 	opponentTime := game.Player2RemainingTime
+	opponentID := game.Player2ID
 
 	if playerID == game.Player2ID {
 
 		myTime = game.Player2RemainingTime
 		opponentTime = game.Player1RemainingTime
+		opponentID = game.Player1ID
 	}
 
 	curTimeStamp := time.Now().UnixMilli()
@@ -179,6 +183,11 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 
 	db.DB.Model(&models.GameMove{}).Where("game_id = ?", game.ID).Order("id asc").Pluck("notation", &moves)
 
+	var playerRating models.UserGameRating
+	var opponentRating models.UserGameRating
+	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", playerID, game.GameTypeID).First(&playerRating)
+	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&opponentRating)
+
 	message := Message{
 		Type:         "reconnect_game",
 		GameID:       gameId,
@@ -191,6 +200,14 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		MoveNotation: gameMove.Notation,
 		Moves:        moves,
 		Data:         dataMsg,
+		MyInfo: PlayerInfo{
+			UserName: playerRating.User.UserName,
+			Rating:   strconv.FormatInt(int64(playerRating.Rating), 10),
+		},
+		OpponentInfo: PlayerInfo{
+			UserName: opponentRating.User.UserName,
+			Rating:   strconv.FormatInt(int64(opponentRating.Rating), 10),
+		},
 	}
 
 	oppoonetPlayerID := game.Player2ID
