@@ -30,6 +30,8 @@ type Message struct {
 	Opponent          Player          `json:"opponent"`
 	MyTime            uint64          `json:"my_time"`
 	OpponentTime      uint64          `json:"opponent_time"`
+	MoveNotation      string          `json:"move_notation"`
+	Moves             []string        `json:"moves"`
 	PromoteTo         string          `json:"promote_to"`
 }
 
@@ -173,6 +175,10 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 
 	}
 
+	var moves []string
+
+	db.DB.Model(&models.GameMove{}).Where("game_id = ?", game.ID).Order("id asc").Pluck("notation", &moves)
+
 	message := Message{
 		Type:         "reconnect_game",
 		GameID:       gameId,
@@ -182,6 +188,8 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		MyTime:       uint64(myTime),
 		OpponentTime: uint64(opponentTime),
 		Status:       status,
+		MoveNotation: gameMove.Notation,
+		Moves:        moves,
 		Data:         dataMsg,
 	}
 
@@ -394,6 +402,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			continue
 		}
+
+		message.MoveNotation = gameMove.Notation
 
 		if game.PlayerTurn == 1 {
 
