@@ -174,17 +174,16 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 	dataMsg, dataErr := json.Marshal(data)
 
 	if dataErr != nil {
-		log.Printf("could not marshal the data info and got the error: %s", err.Error())
+		log.Printf("could not marshal the data info and got the error: %s", dataErr.Error())
 		return
 
 	}
 
 	var moves []string
-
-	db.DB.Model(&models.GameMove{}).Where("game_id = ?", game.ID).Order("id asc").Pluck("notation", &moves)
-
 	var playerRating models.UserGameRating
 	var opponentRating models.UserGameRating
+
+	db.DB.Model(&models.GameMove{}).Where("game_id = ?", game.ID).Order("id asc").Pluck("notation", &moves)
 	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", playerID, game.GameTypeID).First(&playerRating)
 	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&opponentRating)
 

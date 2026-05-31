@@ -3157,3 +3157,68 @@ func getQueenMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (stri
 	return notation + destNote, nil
 
 }
+
+func calculateRating(playerID uint, game models.Game) {
+
+	// calculate players rating using Glicko 1 formula.
+
+	var playerRating models.UserGameRating
+	db.DB.Where("user_id = ? AND game_type_id = ?", playerID, game.GameTypeID).First(&playerRating)
+
+	q := 0.0057565 // ln(10) / 400
+
+	r := float64(playerRating.Rating)
+	ds := float64(0)
+	rs := float64(0)
+
+	var historyGames []models.Game
+	db.DB.Where("user_id = ? AND game_type_id = ? AND status", playerID, game.GameTypeID, "finished").First(&historyGames)
+
+	for _, prvGame := range historyGames {
+
+		rd := prvGame.Player1RatingDeviation
+
+		if playerID == prvGame.Player2ID {
+			rd = prvGame.Player2RatingDeviation
+		}
+
+		ds += d(rd, r, r) //TODO add the player's rating when he played the game
+
+		s := float64(0)
+		if prvGame.WinnerID != nil {
+
+			s = 1
+			if *prvGame.WinnerID != playerID {
+				s = -1
+			}
+		}
+
+		rs += g(rd) * (s - e(rd, r, r)) //TODO add the player's rating when he played the game
+
+	}
+
+	d := math.Pow(math.Pow(0.0057565, 2)*ds, -1)
+
+	newR := r + q/((1/math.Pow(playerRating.Deviation, 2))+1/d)*rs
+	newRD := math.Pow(math.Sqrt(1/math.Pow(playerRating.Deviation, 2)+1/d), -1)
+
+}
+
+func g(rd float64) float64 {
+
+	q := math.Pow(0.0057565, 2)
+	rd = math.Pow(rd, 2)
+	pi := 3.14
+
+	return 1 / math.Sqrt(1+3*q*rd/math.Pow(pi, 2))
+}
+
+func e(rd float64, r float64, rj float64) float64 {
+	return 1 / (1 + math.Pow(10, -g(rd)*(r-rj)/400))
+}
+
+func d(rd float64, r float64, rj float64) float64 {
+
+	e := e(rd, r, rj)
+	return math.Pow(g(rd), 2) * e * (1 - e)
+}
