@@ -122,7 +122,7 @@ func GetInfo(c *gin.Context) {
 		resp.Ratings = append(resp.Ratings, GameRatingResponse{
 			GameType: r.GameType.Name,
 			Duration: r.GameType.Duration,
-			Rating:   r.Rating,
+			Rating:   int(r.Rating),
 		})
 	}
 
@@ -152,7 +152,7 @@ func ListUsers(c *gin.Context) {
 			r.Ratings = append(r.Ratings, GameRatingResponse{
 				GameType: rating.GameType.Name,
 				Duration: rating.GameType.Duration,
-				Rating:   rating.Rating,
+				Rating:   int(rating.Rating),
 			})
 		}
 		response = append(response, r)

@@ -110,6 +110,30 @@ func TrackWatches() {
 					lWS := Players[lID]
 					PlayerMutex.Unlock()
 
+					var player1Rating models.UserGameRating
+					var player2Rating models.UserGameRating
+
+					err := updatePlayerRating(wID, game, &player1Rating)
+
+					if err != nil {
+						log.Println(err)
+
+						return
+					}
+
+					err = updatePlayerRating(lID, game, &player2Rating)
+
+					if err != nil {
+						log.Println(err)
+						return
+					}
+
+					var wPlayer models.User
+					var lPlayer models.User
+
+					db.DB.Where("id = ?", wID).First(&wPlayer)
+					db.DB.Where("id = ?", lID).First(&lPlayer)
+
 					message := Message{
 						GameID:       int(game.ID),
 						Type:         "time_out",
@@ -117,6 +141,14 @@ func TrackWatches() {
 						Board:        game.Board,
 						MyTime:       uint64(winnerTime),
 						OpponentTime: 0,
+						MyInfo: PlayerInfo{
+							UserName: wPlayer.UserName,
+							Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+						},
+						OpponentInfo: PlayerInfo{
+							UserName: lPlayer.UserName,
+							Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+						},
 					}
 					msg1, err := json.Marshal(message)
 
@@ -138,6 +170,16 @@ func TrackWatches() {
 					message.Status = "defeat"
 					message.MyTime = 0
 					message.OpponentTime = uint64(winnerTime)
+
+					message.MyInfo = PlayerInfo{
+						UserName: lPlayer.UserName,
+						Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+					}
+
+					message.OpponentInfo = PlayerInfo{
+						UserName: wPlayer.UserName,
+						Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+					}
 					msg2, err := json.Marshal(message)
 
 					if err != nil {

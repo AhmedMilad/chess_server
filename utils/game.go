@@ -78,6 +78,9 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 	minute := uint(60000)
 	gameTime := int64(gameType.Duration * minute)
 
+	var player1Rating models.UserGameRating
+	var player2Rating models.UserGameRating
+
 	game := models.Game{
 		Player1ID:            p1.UserID,
 		Player2ID:            p2.UserID,
@@ -87,6 +90,12 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 		PlayerTurn:           1,
 		Player1RemainingTime: gameTime,
 		Player2RemainingTime: gameTime,
+
+		Player1Rating: float64(player1Rating.Rating),
+		Player2Rating: float64(player2Rating.Rating),
+
+		Player1RatingDeviation: player1Rating.Deviation,
+		Player2RatingDeviation: player2Rating.Deviation,
 	}
 
 	if turn == 1 {
@@ -124,12 +133,6 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 		delete(Players, p1.UserID)
 		PlayerMutex.Unlock()
 	}
-
-	var player1Rating models.UserGameRating
-	var player2Rating models.UserGameRating
-
-	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", p1.UserID, gameTypeID).First(&player1Rating)
-	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", p2.UserID, gameTypeID).First(&player2Rating)
 
 	player1Notification := Message{
 		Type:         startGame,
@@ -212,17 +215,17 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 	var user models.User
 	db.DB.Preload("Ratings.GameType").Preload("Setting").First(&user, userId)
 
-	var playerRating int
+	var playerRating float64
 	for _, rating := range user.Ratings {
 		if rating.GameTypeID == uint(gameTypeId) {
-			playerRating = rating.Rating
+			playerRating = float64(rating.Rating)
 		}
 	}
 
 	player := Player{
 		UserID:               user.ID,
 		GameTypeID:           uint(gameTypeId),
-		Rating:               playerRating,
+		Rating:               int(playerRating),
 		LowerBoundRatingDiff: int(user.Setting.LowerBoundPlayerRatingDiff),
 		UpperBoundRatingDiff: int(user.Setting.UpperBoundPlayerRatingDiff),
 	}
@@ -3158,59 +3161,75 @@ func getQueenMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (stri
 
 }
 
-func calculateRating(playerID uint, game models.Game) {
+const q = 0.0057565 // ln(10) / 400
+
+func calculateRD(rd float64, lastCompDate time.Time) float64 {
+
+	c := 34.64 // 34.64 means that it requires 100 week to go from 50 to 350 deviation
+
+	elapsed := time.Since(lastCompDate)
+	t := elapsed.Hours() / 168
+	rdSqr := math.Pow(rd, 2)
+
+	return math.Min(350, math.Sqrt(rdSqr+math.Pow(c, 2)*t))
+}
+
+func calculateRating(playerID uint, currentPlayerRating, currentRD float64, historyGames []models.Game) (float64, error) {
+
+	if len(historyGames) == 0 {
+		return currentPlayerRating, nil
+	}
 
 	// calculate players rating using Glicko 1 formula.
 
-	var playerRating models.UserGameRating
-	db.DB.Where("user_id = ? AND game_type_id = ?", playerID, game.GameTypeID).First(&playerRating)
-
-	q := 0.0057565 // ln(10) / 400
-
-	r := float64(playerRating.Rating)
 	ds := float64(0)
 	rs := float64(0)
 
-	var historyGames []models.Game
-	db.DB.Where("user_id = ? AND game_type_id = ? AND status", playerID, game.GameTypeID, "finished").First(&historyGames)
-
 	for _, prvGame := range historyGames {
 
-		rd := prvGame.Player1RatingDeviation
+		ord := prvGame.Player2RatingDeviation
 
 		if playerID == prvGame.Player2ID {
-			rd = prvGame.Player2RatingDeviation
+			ord = prvGame.Player1RatingDeviation
 		}
 
-		ds += d(rd, r, r) //TODO add the player's rating when he played the game
+		playerRating := prvGame.Player1Rating
+		opponentRating := prvGame.Player2Rating
 
-		s := float64(0)
+		if playerID == prvGame.Player2ID {
+			playerRating = prvGame.Player2Rating
+			opponentRating = prvGame.Player1Rating
+
+		}
+
+		ds += d(ord, playerRating, opponentRating)
+
+		s := 0.5
 		if prvGame.WinnerID != nil {
 
 			s = 1
 			if *prvGame.WinnerID != playerID {
-				s = -1
+				s = 0
 			}
 		}
 
-		rs += g(rd) * (s - e(rd, r, r)) //TODO add the player's rating when he played the game
+		rs += g(ord) * (s - e(ord, playerRating, opponentRating))
 
 	}
 
-	d := math.Pow(math.Pow(0.0057565, 2)*ds, -1)
+	fDs := math.Pow(q, 2) * ds
+	dv := math.Pow(fDs, -1)
+	newR := currentPlayerRating + q/((1/math.Pow(currentRD, 2))+1/dv)*rs
 
-	newR := r + q/((1/math.Pow(playerRating.Deviation, 2))+1/d)*rs
-	newRD := math.Pow(math.Sqrt(1/math.Pow(playerRating.Deviation, 2)+1/d), -1)
-
+	return newR, nil
 }
 
 func g(rd float64) float64 {
 
-	q := math.Pow(0.0057565, 2)
 	rd = math.Pow(rd, 2)
-	pi := 3.14
+	pi := math.Pi
 
-	return 1 / math.Sqrt(1+3*q*rd/math.Pow(pi, 2))
+	return 1 / math.Sqrt(1+(3*math.Pow(q, 2)*rd)/math.Pow(pi, 2))
 }
 
 func e(rd float64, r float64, rj float64) float64 {
@@ -3221,4 +3240,89 @@ func d(rd float64, r float64, rj float64) float64 {
 
 	e := e(rd, r, rj)
 	return math.Pow(g(rd), 2) * e * (1 - e)
+}
+
+func calculateNewRD(playerID uint, currentRD float64, historyGames []models.Game) float64 {
+
+	if len(historyGames) == 0 {
+		return currentRD
+	}
+
+	ds := float64(0)
+
+	for _, prvGame := range historyGames {
+
+		ord := prvGame.Player2RatingDeviation
+
+		if playerID == prvGame.Player2ID {
+			ord = prvGame.Player1RatingDeviation
+		}
+
+		playerRating := prvGame.Player1Rating
+		opponentRating := prvGame.Player2Rating
+
+		if playerID == prvGame.Player2ID {
+			playerRating = prvGame.Player2Rating
+			opponentRating = prvGame.Player1Rating
+		}
+
+		ds += d(ord, playerRating, opponentRating)
+	}
+
+	dSquared := 1 / (math.Pow(q, 2) * ds)
+
+	return math.Sqrt(1 / ((1 / math.Pow(currentRD, 2)) + (1 / dSquared)))
+}
+
+func updatePlayerRating(playerID uint, game models.Game, playerRating *models.UserGameRating) error {
+
+	var playerHistoryGames []models.Game
+
+	gameTypeID := game.GameTypeID
+
+	if err := db.DB.
+		Where("user_id = ? AND game_type_id = ?", playerID, gameTypeID).
+		First(playerRating).Error; err != nil {
+		return err
+	}
+
+	err := db.DB.
+		Where(
+			"(player1_id = ? OR player2_id = ?) AND status IN ('finished', 'draw') AND updated_at > ? AND game_type_id = ?",
+			playerID,
+			playerID,
+			playerRating.RatingLastUpdatedAt,
+			gameTypeID,
+		).
+		Order("updated_at ASC").
+		Find(&playerHistoryGames).Error
+
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	playerAdjustedRD := calculateRD(
+		playerRating.Deviation,
+		playerRating.RatingLastUpdatedAt,
+	)
+
+	playerRating.Rating, err = calculateRating(playerID, playerRating.Rating, playerAdjustedRD, playerHistoryGames)
+
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	playerRating.Deviation = calculateNewRD(playerID, playerAdjustedRD, playerHistoryGames)
+
+	now := time.Now()
+
+	playerRating.RatingLastUpdatedAt = now
+
+	if err := db.DB.Save(playerRating).Error; err != nil {
+		return err
+	}
+
+	return nil
 }

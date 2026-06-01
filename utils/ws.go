@@ -463,6 +463,37 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					t2 = game.Player1RemainingTime
 				}
 
+				game.WinnerID = &playerID
+				game.Status = "finished"
+
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err)
+					continue
+				}
+
+				var player1Rating models.UserGameRating
+				var player2Rating models.UserGameRating
+
+				var player1 models.User
+				var player2 models.User
+
+				db.DB.Where("id = ?", playerID).First(&player1)
+				db.DB.Where("id = ?", opponentID).First(&player2)
+
+				err = updatePlayerRating(playerID, game, &player1Rating)
+
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				err = updatePlayerRating(opponentID, game, &player2Rating)
+
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
 				checkMateMessage := Message{
 					GameID:       int(game.ID),
 					Type:         "checkmate",
@@ -471,6 +502,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					Data:         message.Data,
 					MyTime:       uint64(t1),
 					OpponentTime: uint64(t2),
+					MyInfo: PlayerInfo{
+						UserName: player1.UserName,
+						Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+					},
+					OpponentInfo: PlayerInfo{
+						UserName: player2.UserName,
+						Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+					},
 				}
 
 				msg, err := json.Marshal(checkMateMessage)
@@ -493,6 +532,16 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				checkMateMessage.MyTime = uint64(t2)
 				checkMateMessage.OpponentTime = uint64(t1)
 
+				checkMateMessage.MyInfo = PlayerInfo{
+					UserName: player2.UserName,
+					Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+				}
+
+				checkMateMessage.OpponentInfo = PlayerInfo{
+					UserName: player1.UserName,
+					Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+				}
+
 				msg, err = json.Marshal(checkMateMessage)
 
 				if err != nil {
@@ -506,16 +555,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					opponentWS.Close()
 					delete(Players, opponentID)
 					PlayerMutex.Unlock()
-				}
-
-				game.WinnerID = &playerID
-				game.Status = "finished"
-				//TODO calutate the points awarded and deducted here
-
-				if err := db.DB.Save(&game).Error; err != nil {
-					log.Println(err.Error())
-
-					continue
 				}
 
 				continue
@@ -547,9 +586,35 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					t2 = game.Player1RemainingTime
 				}
 
-				if playerID == game.Player2ID {
-					t1 = game.Player2RemainingTime
-					t2 = game.Player1RemainingTime
+				game.Status = "draw"
+
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				var player1Rating models.UserGameRating
+				var player2Rating models.UserGameRating
+
+				var player1 models.User
+				var player2 models.User
+
+				db.DB.Where("id = ?", playerID).First(&player1)
+				db.DB.Where("id = ?", opponentID).First(&player2)
+
+				err = updatePlayerRating(playerID, game, &player1Rating)
+
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				err = updatePlayerRating(opponentID, game, &player2Rating)
+
+				if err != nil {
+					log.Println(err)
+					continue
 				}
 
 				drawMessage := Message{
@@ -560,6 +625,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					Data:         message.Data,
 					MyTime:       uint64(t1),
 					OpponentTime: uint64(t2),
+					MyInfo: PlayerInfo{
+						UserName: player1.UserName,
+						Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+					},
+					OpponentInfo: PlayerInfo{
+						UserName: player2.UserName,
+						Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+					},
 				}
 
 				msg, err := json.Marshal(drawMessage)
@@ -580,6 +653,16 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				drawMessage.MyTime = uint64(t2)
 				drawMessage.OpponentTime = uint64(t1)
 
+				drawMessage.MyInfo = PlayerInfo{
+					UserName: player2.UserName,
+					Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+				}
+
+				drawMessage.OpponentInfo = PlayerInfo{
+					UserName: player1.UserName,
+					Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+				}
+
 				msg, err = json.Marshal(drawMessage)
 
 				if err != nil {
@@ -593,15 +676,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					opponentWS.Close()
 					delete(Players, opponentID)
 					PlayerMutex.Unlock()
-				}
-
-				game.WinnerID = &playerID
-				game.Status = "draw"
-
-				if err := db.DB.Save(&game).Error; err != nil {
-					log.Println(err.Error())
-
-					continue
 				}
 
 				continue

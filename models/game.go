@@ -24,6 +24,8 @@ type Game struct {
 	Player2LastMoveAt      int64          `gorm:"autoUpdateTime:milli"`
 	Player1RemainingTime   int64          `gorm:"not null"`
 	Player2RemainingTime   int64          `gorm:"not null"`
+	Player1Rating          float64        `gorm:"not null"`
+	Player2Rating          float64        `gorm:"not null"`
 	Player1RatingDeviation float64        `gorm:"not null"`
 	Player2RatingDeviation float64        `gorm:"not null"`
 	CreatedAt              time.Time
