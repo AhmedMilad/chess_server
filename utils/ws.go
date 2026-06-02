@@ -533,6 +533,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					Data:         message.Data,
 					MyTime:       uint64(t1),
 					OpponentTime: uint64(t2),
+					MoveNotation: gameMove.Notation,
 					MyInfo: PlayerInfo{
 						UserName: player1.UserName,
 						Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
@@ -682,6 +683,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					Data:         message.Data,
 					MyTime:       uint64(t1),
 					OpponentTime: uint64(t2),
+					MoveNotation: gameMove.Notation,
 					MyInfo: PlayerInfo{
 						UserName: player1.UserName,
 						Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
