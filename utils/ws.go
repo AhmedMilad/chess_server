@@ -18,23 +18,25 @@ var Upgrader = websocket.Upgrader{
 }
 
 type Message struct {
-	GameID            int             `json:"game_id"`
-	Type              string          `json:"type"`
-	Status            string          `json:"status"`
-	Color             string          `json:"color"`
-	Data              json.RawMessage `json:"data"`
-	Board             string          `json:"board"`
-	Turn              int             `json:"turn"`
-	CangLongCastle    bool            `json:"can_long_castle"`
-	CanKingSideCastle bool            `json:"can_king_side_castle"`
-	EnpassantSquare   string          `json:"enpassant_square"`
-	OpponentInfo      PlayerInfo      `json:"opponent_info"`
-	MyInfo            PlayerInfo      `json:"my_info"`
-	MyTime            uint64          `json:"my_time"`
-	OpponentTime      uint64          `json:"opponent_time"`
-	MoveNotation      string          `json:"move_notation"`
-	Moves             []string        `json:"moves"`
-	PromoteTo         string          `json:"promote_to"`
+	GameID              int             `json:"game_id"`
+	Type                string          `json:"type"`
+	Status              string          `json:"status"`
+	Color               string          `json:"color"`
+	Data                json.RawMessage `json:"data"`
+	Board               string          `json:"board"`
+	Turn                int             `json:"turn"`
+	CangLongCastle      bool            `json:"can_long_castle"`
+	CanKingSideCastle   bool            `json:"can_king_side_castle"`
+	EnpassantSquare     string          `json:"enpassant_square"`
+	OpponentInfo        PlayerInfo      `json:"opponent_info"`
+	MyInfo              PlayerInfo      `json:"my_info"`
+	MyTime              uint64          `json:"my_time"`
+	OpponentTime        uint64          `json:"opponent_time"`
+	MoveNotation        string          `json:"move_notation"`
+	Moves               []string        `json:"moves"`
+	PromoteTo           string          `json:"promote_to"`
+	MyPointsDelta       float64         `json:"my_points_delta"`
+	OpponentPointsDelta float64         `json:"opponent_points_delta"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -92,12 +94,18 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 	myTime := game.Player1RemainingTime
 	opponentTime := game.Player2RemainingTime
 	opponentID := game.Player2ID
+	myPointsDelta := game.Player1PointsDelta
+	opponentPointsDelta := game.Player2PointsDelta
 
 	if playerID == game.Player2ID {
 
 		myTime = game.Player2RemainingTime
 		opponentTime = game.Player1RemainingTime
 		opponentID = game.Player1ID
+
+		myPointsDelta = game.Player2PointsDelta
+		opponentPointsDelta = game.Player1PointsDelta
+
 	}
 
 	curTimeStamp := time.Now().UnixMilli()
@@ -207,6 +215,8 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 			UserName: opponentRating.User.UserName,
 			Rating:   strconv.FormatInt(int64(opponentRating.Rating), 10),
 		},
+		MyPointsDelta:       myPointsDelta,
+		OpponentPointsDelta: opponentPointsDelta,
 	}
 
 	oppoonetPlayerID := game.Player2ID
@@ -477,21 +487,42 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				var player1 models.User
 				var player2 models.User
 
-				db.DB.Where("id = ?", playerID).First(&player1)
+				db.DB.Where("id = ?", currentPlayerID).First(&player1)
 				db.DB.Where("id = ?", opponentID).First(&player2)
 
-				err = updatePlayerRating(playerID, game, &player1Rating)
+				if err := db.DB.Where("user_id = ? AND game_type_id = ?", currentPlayerID, game.GameTypeID).First(&player1Rating).Error; err != nil {
+
+					log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", playerID, game.GameTypeID)
+					return
+				}
+
+				if err := db.DB.Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&player2Rating).Error; err != nil {
+
+					log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", opponentID, game.GameTypeID)
+					return
+				}
+
+				err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
 
 				if err != nil {
 					log.Println(err)
 					continue
 				}
 
-				err = updatePlayerRating(opponentID, game, &player2Rating)
+				err = updatePlayerRating(opponentID, &game, &player2Rating)
 
 				if err != nil {
 					log.Println(err)
 					continue
+				}
+
+				myPointsDelta := game.Player1PointsDelta
+				opponentPointsDelta := game.Player2PointsDelta
+
+				if currentPlayerID == game.Player2ID {
+					myPointsDelta = game.Player2PointsDelta
+					opponentPointsDelta = game.Player1PointsDelta
+
 				}
 
 				checkMateMessage := Message{
@@ -510,6 +541,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 						UserName: player2.UserName,
 						Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
 					},
+					MyPointsDelta:       myPointsDelta,
+					OpponentPointsDelta: opponentPointsDelta,
 				}
 
 				msg, err := json.Marshal(checkMateMessage)
@@ -541,6 +574,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					UserName: player1.UserName,
 					Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
 				}
+
+				checkMateMessage.MyPointsDelta = opponentPointsDelta
+				checkMateMessage.OpponentPointsDelta = myPointsDelta
 
 				msg, err = json.Marshal(checkMateMessage)
 
@@ -600,21 +636,42 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				var player1 models.User
 				var player2 models.User
 
-				db.DB.Where("id = ?", playerID).First(&player1)
+				if err := db.DB.Where("user_id = ? AND game_type_id = ?", currentPlayerID, game.GameTypeID).First(&player1Rating).Error; err != nil {
+
+					log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", playerID, game.GameTypeID)
+					return
+				}
+
+				if err := db.DB.Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&player2Rating).Error; err != nil {
+
+					log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", opponentID, game.GameTypeID)
+					return
+				}
+
+				db.DB.Where("id = ?", currentPlayerID).First(&player1)
 				db.DB.Where("id = ?", opponentID).First(&player2)
 
-				err = updatePlayerRating(playerID, game, &player1Rating)
+				err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
 
 				if err != nil {
 					log.Println(err)
 					continue
 				}
 
-				err = updatePlayerRating(opponentID, game, &player2Rating)
+				err = updatePlayerRating(opponentID, &game, &player2Rating)
 
 				if err != nil {
 					log.Println(err)
 					continue
+				}
+
+				myPointsDelta := game.Player1PointsDelta
+				opponentPointsDelta := game.Player2PointsDelta
+
+				if currentPlayerID == game.Player2ID {
+					myPointsDelta = game.Player2PointsDelta
+					opponentPointsDelta = game.Player1PointsDelta
+
 				}
 
 				drawMessage := Message{
@@ -633,6 +690,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 						UserName: player2.UserName,
 						Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
 					},
+
+					MyPointsDelta:       myPointsDelta,
+					OpponentPointsDelta: opponentPointsDelta,
 				}
 
 				msg, err := json.Marshal(drawMessage)
@@ -652,6 +712,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 				drawMessage.MyTime = uint64(t2)
 				drawMessage.OpponentTime = uint64(t1)
+
+				drawMessage.MyPointsDelta = opponentPointsDelta
+				drawMessage.OpponentPointsDelta = myPointsDelta
 
 				drawMessage.MyInfo = PlayerInfo{
 					UserName: player2.UserName,

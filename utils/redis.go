@@ -113,7 +113,19 @@ func TrackWatches() {
 					var player1Rating models.UserGameRating
 					var player2Rating models.UserGameRating
 
-					err := updatePlayerRating(wID, game, &player1Rating)
+					if err := db.DB.Where("user_id = ? AND game_type_id = ?", wID, game.GameTypeID).First(&player1Rating).Error; err != nil {
+
+						log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", wID, game.GameTypeID)
+						return
+					}
+
+					if err := db.DB.Where("user_id = ? AND game_type_id = ?", lID, game.GameTypeID).First(&player2Rating).Error; err != nil {
+
+						log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", lID, game.GameTypeID)
+						return
+					}
+
+					err := updatePlayerRating(wID, &game, &player1Rating)
 
 					if err != nil {
 						log.Println(err)
@@ -121,7 +133,7 @@ func TrackWatches() {
 						return
 					}
 
-					err = updatePlayerRating(lID, game, &player2Rating)
+					err = updatePlayerRating(lID, &game, &player2Rating)
 
 					if err != nil {
 						log.Println(err)
@@ -130,6 +142,15 @@ func TrackWatches() {
 
 					var wPlayer models.User
 					var lPlayer models.User
+
+					myPointsDelta := game.Player1PointsDelta
+					opponentPointsDelta := game.Player2PointsDelta
+
+					if wID == game.Player2ID {
+						myPointsDelta = game.Player2PointsDelta
+						opponentPointsDelta = game.Player1PointsDelta
+
+					}
 
 					db.DB.Where("id = ?", wID).First(&wPlayer)
 					db.DB.Where("id = ?", lID).First(&lPlayer)
@@ -149,6 +170,8 @@ func TrackWatches() {
 							UserName: lPlayer.UserName,
 							Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
 						},
+						MyPointsDelta:       myPointsDelta,
+						OpponentPointsDelta: opponentPointsDelta,
 					}
 					msg1, err := json.Marshal(message)
 
@@ -170,6 +193,9 @@ func TrackWatches() {
 					message.Status = "defeat"
 					message.MyTime = 0
 					message.OpponentTime = uint64(winnerTime)
+
+					message.MyPointsDelta = opponentPointsDelta
+					message.OpponentPointsDelta = myPointsDelta
 
 					message.MyInfo = PlayerInfo{
 						UserName: lPlayer.UserName,

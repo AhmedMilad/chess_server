@@ -81,6 +81,18 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 	var player1Rating models.UserGameRating
 	var player2Rating models.UserGameRating
 
+	if err := db.DB.Where("user_id = ? AND game_type_id = ?", p1.UserID, gameTypeID).First(&player1Rating).Error; err != nil {
+
+		log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", p1.UserID, gameTypeID)
+		return
+	}
+
+	if err := db.DB.Where("user_id = ? AND game_type_id = ?", p2.UserID, gameTypeID).First(&player2Rating).Error; err != nil {
+
+		log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", p2.UserID, gameTypeID)
+		return
+	}
+
 	game := models.Game{
 		Player1ID:            p1.UserID,
 		Player2ID:            p2.UserID,
@@ -3274,7 +3286,7 @@ func calculateNewRD(playerID uint, currentRD float64, historyGames []models.Game
 	return math.Sqrt(1 / ((1 / math.Pow(currentRD, 2)) + (1 / dSquared)))
 }
 
-func updatePlayerRating(playerID uint, game models.Game, playerRating *models.UserGameRating) error {
+func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.UserGameRating) error {
 
 	var playerHistoryGames []models.Game
 
@@ -3307,6 +3319,8 @@ func updatePlayerRating(playerID uint, game models.Game, playerRating *models.Us
 		playerRating.RatingLastUpdatedAt,
 	)
 
+	oldRating := playerRating.Rating
+
 	playerRating.Rating, err = calculateRating(playerID, playerRating.Rating, playerAdjustedRD, playerHistoryGames)
 
 	if err != nil {
@@ -3321,6 +3335,18 @@ func updatePlayerRating(playerID uint, game models.Game, playerRating *models.Us
 	playerRating.RatingLastUpdatedAt = now
 
 	if err := db.DB.Save(playerRating).Error; err != nil {
+		return err
+	}
+
+	if playerID == game.Player1ID {
+		game.Player1PointsDelta = playerRating.Rating - oldRating
+	} else {
+
+		game.Player2PointsDelta = playerRating.Rating - oldRating
+	}
+
+	if err := db.DB.Save(game).Error; err != nil {
+
 		return err
 	}
 
