@@ -68,7 +68,7 @@ func TrackWatches() {
 
 					game := models.Game{}
 
-					if err := db.DB.Where("id = ?", key).First(&game).Error; err != nil {
+					if err := db.DB.Where("id = ? AND status = 'ongoing'", key).First(&game).Error; err != nil {
 						log.Printf("failed to find game %s in db: %v", key, err)
 						return
 					}
