@@ -36,6 +36,7 @@ type Message struct {
 	Moves               []string        `json:"moves"`
 	PromoteTo           string          `json:"promote_to"`
 	MyPointsDelta       float64         `json:"my_points_delta"`
+	IsOfferDraw         bool            `json:"is_offer_draw"`
 	OpponentPointsDelta float64         `json:"opponent_points_delta"`
 }
 
@@ -274,18 +275,112 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		}
 
 		var message Message
+		var game models.Game
 
 		if err := json.Unmarshal(msg, &message); err != nil {
 			log.Println("Invalid message:", err)
 			continue
 		}
-		var game models.Game
 
 		if err := db.DB.First(&game, message.GameID).Error; err != nil {
 			log.Println("Game not found:", err)
 			continue
 		}
 
+		if message.Type == "draw" {
+
+			if game.DrawAcceptedByID != nil && game.DrawOfferedByID != nil {
+				continue
+			}
+
+			if game.DrawOfferedByID == nil {
+
+				game.DrawOfferedByID = &playerID
+
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+			} else {
+				if *game.DrawOfferedByID != playerID {
+
+					// both players agreed to draw
+					game.DrawAcceptedByID = &playerID
+
+					if err := db.DB.Save(&game).Error; err != nil {
+						log.Println(err.Error())
+
+						continue
+					}
+
+				}
+
+			}
+
+			opponentID := game.Player1ID
+
+			if game.Player1ID == playerID {
+
+				opponentID = game.Player2ID
+			}
+
+			PlayerMutex.Lock()
+
+			opponentWS, opponentOk := Players[opponentID]
+
+			PlayerMutex.Unlock()
+
+			if opponentOk {
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				offerDrawMessage := Message{
+					GameID:      int(game.ID),
+					Type:        "draw",
+					IsOfferDraw: true,
+				}
+
+				msg, err = json.Marshal(offerDrawMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
+			continue
+		}
+
+		if message.Type == "resign" {
+
+			continue
+		}
+
+		if message.Type == "cancel_draw" {
+
+			continue
+		}
+
+		if message.Type == "cancel_resign" {
+
+			continue
+		}
+
+		// handle move logic
 		if game.Status != "ongoing" || game.Player1RemainingTime == 0 {
 
 			PlayerMutex.Lock()
