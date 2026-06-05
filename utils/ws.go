@@ -37,7 +37,8 @@ type Message struct {
 	Moves               []string        `json:"moves"`
 	PromoteTo           string          `json:"promote_to"`
 	MyPointsDelta       float64         `json:"my_points_delta"`
-	IsOfferDraw         bool            `json:"is_offer_draw"`
+	IsDrawAvailable     bool            `json:"is_draw_available"`
+	IsDrawOffered       bool            `json:"is_draw_offered"`
 	OpponentPointsDelta float64         `json:"opponent_points_delta"`
 }
 
@@ -197,6 +198,17 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", playerID, game.GameTypeID).First(&playerRating)
 	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&opponentRating)
 
+	isDrawAvailable := false
+	isDrawOffered := false
+
+	if game.DrawOfferedByID != nil {
+		if *game.DrawOfferedByID == playerID {
+			isDrawOffered = true
+		} else {
+			isDrawAvailable = true
+		}
+	}
+
 	message := Message{
 		Type:         "reconnect_game",
 		GameID:       gameId,
@@ -219,6 +231,8 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		},
 		MyPointsDelta:       myPointsDelta,
 		OpponentPointsDelta: opponentPointsDelta,
+		IsDrawAvailable:     isDrawAvailable,
+		IsDrawOffered:       isDrawOffered,
 	}
 
 	oppoonetPlayerID := game.Player2ID
@@ -358,9 +372,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				offerDrawMessage := Message{
-					GameID:      int(game.ID),
-					Type:        "draw_offered",
-					IsOfferDraw: true,
+					GameID:          int(game.ID),
+					Type:            "draw_offered",
+					IsDrawAvailable: true,
 				}
 
 				msg, err = json.Marshal(offerDrawMessage)
@@ -413,9 +427,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				offerDrawMessage := Message{
-					GameID:      int(game.ID),
-					Type:        "cancel_draw",
-					IsOfferDraw: true,
+					GameID:          int(game.ID),
+					Type:            "cancel_draw",
+					IsDrawAvailable: true,
 				}
 
 				msg, err = json.Marshal(offerDrawMessage)
@@ -475,9 +489,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				offerDrawMessage := Message{
-					GameID:      int(game.ID),
-					Type:        "decline_draw",
-					IsOfferDraw: true,
+					GameID:          int(game.ID),
+					Type:            "decline_draw",
+					IsDrawAvailable: true,
 				}
 
 				msg, err = json.Marshal(offerDrawMessage)
@@ -995,6 +1009,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			continue
 		}
+
+		game.DrawOfferedByID = nil
 
 		if err := db.DB.Save(&game).Error; err != nil {
 			log.Println(err.Error())
