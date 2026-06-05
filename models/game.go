@@ -1,6 +1,7 @@
 package models
 
 import (
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -18,22 +19,31 @@ type Game struct {
 	PlayerTurn             int      `gorm:"check:player_turn IN (1,2)"`
 	Player1PointsDelta     float64  `gorm:"default:0"`
 	Player2PointsDelta     float64  `gorm:"default:0"`
-	Player1LastMoveAt      int64    `gorm:"autoUpdateTime:milli"`
-	Player2LastMoveAt      int64    `gorm:"autoUpdateTime:milli"`
-	Player1RemainingTime   int64    `gorm:"not null"`
-	Player2RemainingTime   int64    `gorm:"not null"`
-	Player1Rating          float64  `gorm:"not null"`
-	Player2Rating          float64  `gorm:"not null"`
-	Player1RatingDeviation float64  `gorm:"not null"`
-	Player2RatingDeviation float64  `gorm:"not null"`
-	DrawOfferedByID        *uint     `gorm:"default:null"`
-	DrawOfferedBy          User     `gorm:"foreignKey:DrawOfferedByID"`
-	DrawAcceptedByID       *uint     `gorm:"default:null"`
-	DrawAcceptedBy         User     `gorm:"foreignKey:DrawAcceptedByID"`
-	RematchOfferedByID     *uint     `gorm:"default:null"`
-	RematchOfferedBy       User     `gorm:"foreignKey:RematchOfferedByID"`
-	RematchAcceptedByID    *uint     `gorm:"default:null"`
-	RematchAcceptedBy      User     `gorm:"foreignKey:RematchAcceptedByID"`
+	Player1LastMoveAt      int64
+	Player2LastMoveAt      int64
+	Player1RemainingTime   int64   `gorm:"not null"`
+	Player2RemainingTime   int64   `gorm:"not null"`
+	Player1Rating          float64 `gorm:"not null"`
+	Player2Rating          float64 `gorm:"not null"`
+	Player1RatingDeviation float64 `gorm:"not null"`
+	Player2RatingDeviation float64 `gorm:"not null"`
+	DrawOfferedByID        *uint   `gorm:"default:null"`
+	DrawOfferedBy          User    `gorm:"foreignKey:DrawOfferedByID"`
+	DrawAcceptedByID       *uint   `gorm:"default:null"`
+	DrawAcceptedBy         User    `gorm:"foreignKey:DrawAcceptedByID"`
+	RematchOfferedByID     *uint   `gorm:"default:null"`
+	RematchOfferedBy       User    `gorm:"foreignKey:RematchOfferedByID"`
+	RematchAcceptedByID    *uint   `gorm:"default:null"`
+	RematchAcceptedBy      User    `gorm:"foreignKey:RematchAcceptedByID"`
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+}
+
+func (g *Game) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now().UnixMilli()
+
+	g.Player1LastMoveAt = now
+	g.Player2LastMoveAt = now
+
+	return nil
 }

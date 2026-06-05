@@ -5,6 +5,7 @@ import (
 	"chess_server/models"
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -287,6 +288,29 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
+		var opponentID, currentPlayerID uint
+
+		if game.Player1ID == playerID {
+
+			currentPlayerID = game.Player1ID
+			opponentID = game.Player2ID
+		} else if game.Player2ID == playerID {
+
+			opponentID = game.Player1ID
+			currentPlayerID = game.Player2ID
+		} else {
+
+			log.Println("Player not part of this game")
+			continue
+		}
+
+		PlayerMutex.Lock()
+
+		opponentWS, opponentOk := Players[opponentID]
+		playerWS, playerOk := Players[currentPlayerID]
+
+		PlayerMutex.Unlock()
+
 		if message.Type == "draw" {
 
 			if game.DrawAcceptedByID != nil && game.DrawOfferedByID != nil {
@@ -326,12 +350,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				opponentID = game.Player2ID
 			}
 
-			PlayerMutex.Lock()
-
-			opponentWS, opponentOk := Players[opponentID]
-
-			PlayerMutex.Unlock()
-
 			if opponentOk {
 				if err := db.DB.Save(&game).Error; err != nil {
 					log.Println(err.Error())
@@ -341,7 +359,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 				offerDrawMessage := Message{
 					GameID:      int(game.ID),
-					Type:        "draw",
+					Type:        "draw_offered",
 					IsOfferDraw: true,
 				}
 
@@ -365,17 +383,505 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			continue
 		}
 
-		if message.Type == "resign" {
-
-			continue
-		}
-
 		if message.Type == "cancel_draw" {
 
+			if *game.DrawOfferedByID != playerID {
+
+				continue
+			}
+
+			game.DrawOfferedByID = nil
+
+			if err := db.DB.Save(&game).Error; err != nil {
+				log.Println(err.Error())
+
+				continue
+			}
+
+			opponentID := game.Player1ID
+
+			if game.Player1ID == playerID {
+
+				opponentID = game.Player2ID
+			}
+
+			if opponentOk && playerOk {
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				offerDrawMessage := Message{
+					GameID:      int(game.ID),
+					Type:        "cancel_draw",
+					IsOfferDraw: true,
+				}
+
+				msg, err = json.Marshal(offerDrawMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
 			continue
 		}
 
-		if message.Type == "cancel_resign" {
+		if message.Type == "decline_draw" {
+
+			if *game.DrawOfferedByID == playerID {
+
+				continue
+			}
+
+			game.DrawOfferedByID = nil
+
+			if err := db.DB.Save(&game).Error; err != nil {
+				log.Println(err.Error())
+
+				continue
+			}
+
+			opponentID := game.Player1ID
+
+			if game.Player1ID == playerID {
+
+				opponentID = game.Player2ID
+			}
+
+			if opponentOk && playerOk {
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				offerDrawMessage := Message{
+					GameID:      int(game.ID),
+					Type:        "decline_draw",
+					IsOfferDraw: true,
+				}
+
+				msg, err = json.Marshal(offerDrawMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
+			continue
+		}
+
+		if message.Type == "accept_draw" {
+
+			if *game.DrawOfferedByID != opponentID {
+				// TODO log here
+				continue
+			}
+
+			myTime := game.Player1RemainingTime
+			opponentTime := game.Player2RemainingTime
+
+			if playerID == game.Player2ID {
+
+				myTime = game.Player2RemainingTime
+				opponentTime = game.Player1RemainingTime
+				opponentID = game.Player1ID
+
+			}
+
+			curTimeStamp := time.Now().UnixMilli()
+			graceLagTime := int64(300)
+
+			if game.PlayerTurn == 1 {
+
+				calculatedTime := game.Player1RemainingTime
+
+				if game.Status == "ongoing" {
+					calculatedTime = game.Player1RemainingTime - curTimeStamp + game.Player1LastMoveAt
+
+				}
+
+				if playerID == game.Player1ID {
+					myTime = calculatedTime
+				} else {
+					opponentTime = calculatedTime
+
+				}
+
+				timeTaken := curTimeStamp - game.Player1LastMoveAt
+				timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
+
+				game.Player1RemainingTime = int64(math.Max(0, float64(game.Player1RemainingTime-timeSpent)))
+
+			} else {
+				calculatedTime := game.Player2RemainingTime
+				if game.Status == "ongoing" {
+
+					calculatedTime = game.Player2RemainingTime - curTimeStamp + game.Player2LastMoveAt
+				}
+
+				if playerID == game.Player1ID {
+					opponentTime = calculatedTime
+				} else {
+					myTime = calculatedTime
+
+				}
+				timeTaken := curTimeStamp - game.Player2LastMoveAt
+				timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
+
+				game.Player2RemainingTime = int64(math.Max(0, float64(game.Player2RemainingTime-timeSpent)))
+
+			}
+
+			if myTime < 0 {
+				myTime = 0
+			}
+			if opponentTime < 0 {
+				opponentTime = 0
+			}
+
+			game.Status = "draw"
+
+			if err := db.DB.Save(&game).Error; err != nil {
+				log.Println(err.Error())
+
+				continue
+			}
+
+			var player1Rating models.UserGameRating
+			var player2Rating models.UserGameRating
+
+			var player1 models.User
+			var player2 models.User
+
+			if err := db.DB.Where("user_id = ? AND game_type_id = ?", currentPlayerID, game.GameTypeID).First(&player1Rating).Error; err != nil {
+
+				log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", playerID, game.GameTypeID)
+				return
+			}
+
+			if err := db.DB.Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&player2Rating).Error; err != nil {
+
+				log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", opponentID, game.GameTypeID)
+				return
+			}
+
+			db.DB.Where("id = ?", currentPlayerID).First(&player1)
+			db.DB.Where("id = ?", opponentID).First(&player2)
+
+			err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
+
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			err = updatePlayerRating(opponentID, &game, &player2Rating)
+
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			myPointsDelta := game.Player1PointsDelta
+			opponentPointsDelta := game.Player2PointsDelta
+
+			if currentPlayerID == game.Player2ID {
+				myPointsDelta = game.Player2PointsDelta
+				opponentPointsDelta = game.Player1PointsDelta
+
+			}
+
+			drawMessage := Message{
+				GameID:       int(game.ID),
+				Type:         "draw",
+				Board:        game.Board,
+				Status:       "draw",
+				Data:         message.Data,
+				MyTime:       uint64(myTime),
+				OpponentTime: uint64(opponentTime),
+				MyInfo: PlayerInfo{
+					UserName: player1.UserName,
+					Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+				},
+				OpponentInfo: PlayerInfo{
+					UserName: player2.UserName,
+					Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+				},
+
+				MyPointsDelta:       myPointsDelta,
+				OpponentPointsDelta: opponentPointsDelta,
+			}
+
+			msg, err := json.Marshal(drawMessage)
+
+			if err != nil {
+
+				log.Println("Invalid message")
+				continue
+			}
+
+			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+				PlayerMutex.Lock()
+				playerWS.Close()
+				delete(Players, playerID)
+				PlayerMutex.Unlock()
+			}
+
+			drawMessage.MyTime = uint64(opponentTime)
+			drawMessage.OpponentTime = uint64(myTime)
+
+			drawMessage.MyPointsDelta = opponentPointsDelta
+			drawMessage.OpponentPointsDelta = myPointsDelta
+
+			drawMessage.MyInfo = PlayerInfo{
+				UserName: player2.UserName,
+				Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+			}
+
+			drawMessage.OpponentInfo = PlayerInfo{
+				UserName: player1.UserName,
+				Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+			}
+
+			msg, err = json.Marshal(drawMessage)
+
+			if err != nil {
+
+				log.Println("Invalid message")
+				continue
+			}
+
+			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+				PlayerMutex.Lock()
+				opponentWS.Close()
+				delete(Players, opponentID)
+				PlayerMutex.Unlock()
+			}
+
+			continue
+		}
+
+		if message.Type == "resign" {
+
+			myTime := game.Player1RemainingTime
+			opponentTime := game.Player2RemainingTime
+
+			if playerID == game.Player2ID {
+
+				myTime = game.Player2RemainingTime
+				opponentTime = game.Player1RemainingTime
+				opponentID = game.Player1ID
+
+			}
+
+			curTimeStamp := time.Now().UnixMilli()
+			graceLagTime := int64(300)
+
+			if game.PlayerTurn == 1 {
+
+				calculatedTime := game.Player1RemainingTime
+
+				if game.Status == "ongoing" {
+					calculatedTime = game.Player1RemainingTime - curTimeStamp + game.Player1LastMoveAt
+
+				}
+
+				if playerID == game.Player1ID {
+					myTime = calculatedTime
+				} else {
+					opponentTime = calculatedTime
+
+				}
+
+				timeTaken := curTimeStamp - game.Player1LastMoveAt
+				timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
+
+				game.Player1RemainingTime = int64(math.Max(0, float64(game.Player1RemainingTime-timeSpent)))
+
+			} else {
+				calculatedTime := game.Player2RemainingTime
+				if game.Status == "ongoing" {
+
+					calculatedTime = game.Player2RemainingTime - curTimeStamp + game.Player2LastMoveAt
+				}
+
+				if playerID == game.Player1ID {
+					opponentTime = calculatedTime
+				} else {
+					myTime = calculatedTime
+
+				}
+				timeTaken := curTimeStamp - game.Player2LastMoveAt
+				timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
+
+				game.Player2RemainingTime = int64(math.Max(0, float64(game.Player2RemainingTime-timeSpent)))
+
+			}
+
+			if myTime < 0 {
+				myTime = 0
+			}
+			if opponentTime < 0 {
+				opponentTime = 0
+			}
+
+			game.Status = "finished"
+			game.WinnerID = &opponentID
+
+			if err := db.DB.Save(&game).Error; err != nil {
+				log.Println(err.Error())
+
+				continue
+			}
+
+			var player1Rating models.UserGameRating
+			var player2Rating models.UserGameRating
+
+			var player1 models.User
+			var player2 models.User
+
+			if err := db.DB.Where("user_id = ? AND game_type_id = ?", currentPlayerID, game.GameTypeID).First(&player1Rating).Error; err != nil {
+
+				log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", playerID, game.GameTypeID)
+				return
+			}
+
+			if err := db.DB.Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&player2Rating).Error; err != nil {
+
+				log.Printf("Could not find ther user game rating with the user id %d and game type id %d while creating a game", opponentID, game.GameTypeID)
+				return
+			}
+
+			db.DB.Where("id = ?", currentPlayerID).First(&player1)
+			db.DB.Where("id = ?", opponentID).First(&player2)
+
+			err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
+
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			err = updatePlayerRating(opponentID, &game, &player2Rating)
+
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			myPointsDelta := game.Player1PointsDelta
+			opponentPointsDelta := game.Player2PointsDelta
+
+			if currentPlayerID == game.Player2ID {
+				myPointsDelta = game.Player2PointsDelta
+				opponentPointsDelta = game.Player1PointsDelta
+
+			}
+
+			resignMessage := Message{
+				GameID:       int(game.ID),
+				Type:         "resign",
+				Board:        game.Board,
+				Status:       "defeat",
+				Data:         message.Data,
+				MyTime:       uint64(myTime),
+				OpponentTime: uint64(opponentTime),
+				MyInfo: PlayerInfo{
+					UserName: player1.UserName,
+					Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+				},
+				OpponentInfo: PlayerInfo{
+					UserName: player2.UserName,
+					Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+				},
+
+				MyPointsDelta:       myPointsDelta,
+				OpponentPointsDelta: opponentPointsDelta,
+			}
+
+			msg, err := json.Marshal(resignMessage)
+
+			if err != nil {
+
+				log.Println("Invalid message")
+				continue
+			}
+
+			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+				PlayerMutex.Lock()
+				playerWS.Close()
+				delete(Players, playerID)
+				PlayerMutex.Unlock()
+			}
+
+			resignMessage.MyTime = uint64(opponentTime)
+			resignMessage.OpponentTime = uint64(myTime)
+			resignMessage.Status = "win"
+
+			resignMessage.MyPointsDelta = opponentPointsDelta
+			resignMessage.OpponentPointsDelta = myPointsDelta
+
+			resignMessage.MyInfo = PlayerInfo{
+				UserName: player2.UserName,
+				Rating:   strconv.FormatFloat(player2Rating.Rating, 'f', 0, 64),
+			}
+
+			resignMessage.OpponentInfo = PlayerInfo{
+				UserName: player1.UserName,
+				Rating:   strconv.FormatFloat(player1Rating.Rating, 'f', 0, 64),
+			}
+
+			msg, err = json.Marshal(resignMessage)
+
+			if err != nil {
+
+				log.Println("Invalid message")
+				continue
+			}
+
+			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+				PlayerMutex.Lock()
+				opponentWS.Close()
+				delete(Players, opponentID)
+				PlayerMutex.Unlock()
+			}
 
 			continue
 		}
@@ -431,22 +937,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 		playerGameState := models.GameState{}
 		opponentGameState := models.GameState{}
-
-		var opponentID, currentPlayerID uint
-
-		if game.Player1ID == playerID {
-
-			currentPlayerID = game.Player1ID
-			opponentID = game.Player2ID
-		} else if game.Player2ID == playerID {
-
-			opponentID = game.Player1ID
-			currentPlayerID = game.Player2ID
-		} else {
-
-			log.Println("Player not part of this game")
-			continue
-		}
 
 		err = db.DB.Where("game_id = ? AND user_id = ?", game.ID, targetPlayerID).First(&playerGameState).Error
 
@@ -533,13 +1023,6 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 			UpdateWatch(game.ID, time.Duration(game.Player2RemainingTime)*time.Millisecond)
 		}
-
-		PlayerMutex.Lock()
-
-		opponentWS, opponentOk := Players[opponentID]
-		playerWS, playerOk := Players[currentPlayerID]
-
-		PlayerMutex.Unlock()
 
 		if playerOk && opponentOk {
 			isMate, mateErr := isCheckMate(int(opponentID), playerGameState, opponentGameState, game, message.PromoteTo)
