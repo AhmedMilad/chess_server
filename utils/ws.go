@@ -37,9 +37,11 @@ type Message struct {
 	Moves               []string        `json:"moves"`
 	PromoteTo           string          `json:"promote_to"`
 	MyPointsDelta       float64         `json:"my_points_delta"`
+	OpponentPointsDelta float64         `json:"opponent_points_delta"`
 	IsDrawAvailable     bool            `json:"is_draw_available"`
 	IsDrawOffered       bool            `json:"is_draw_offered"`
-	OpponentPointsDelta float64         `json:"opponent_points_delta"`
+	IsRematchOffered    bool            `json:"is_rematch_offered"`
+	IsRematchAvailable  bool            `json:"is_rematch_available"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -209,6 +211,17 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		}
 	}
 
+	isRematchAvailable := false
+	isRematchOffered := false
+
+	if game.RematchOfferedByID != nil {
+		if *game.RematchOfferedByID == playerID {
+			isRematchOffered = true
+		} else {
+			isRematchAvailable = true
+		}
+	}
+
 	message := Message{
 		Type:         "reconnect_game",
 		GameID:       gameId,
@@ -233,6 +246,8 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		OpponentPointsDelta: opponentPointsDelta,
 		IsDrawAvailable:     isDrawAvailable,
 		IsDrawOffered:       isDrawOffered,
+		IsRematchOffered:    isRematchOffered,
+		IsRematchAvailable:  isRematchAvailable,
 	}
 
 	oppoonetPlayerID := game.Player2ID
@@ -897,6 +912,162 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				PlayerMutex.Unlock()
 			}
 
+			continue
+		}
+
+		if message.Type == "offer_rematch" {
+
+			if game.RematchOfferedByID != nil && game.DrawOfferedByID != nil {
+				continue
+			}
+
+			if game.RematchOfferedByID == nil {
+
+				game.RematchOfferedByID = &playerID
+
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+			} else {
+				if *game.RematchOfferedByID != playerID {
+
+					// both players agreed to draw
+					game.RematchOfferedByID = &playerID
+
+					if err := db.DB.Save(&game).Error; err != nil {
+						log.Println(err.Error())
+
+						continue
+					}
+
+				}
+
+			}
+
+			opponentID := game.Player1ID
+
+			if game.Player1ID == playerID {
+
+				opponentID = game.Player2ID
+			}
+
+			if opponentOk {
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				offerRematchMessage := Message{
+					GameID:             int(game.ID),
+					Type:               "rematch_offered",
+					IsRematchAvailable: true,
+				}
+
+				msg, err = json.Marshal(offerRematchMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
+			continue
+		}
+
+		if message.Type == "cancel_rematch" {
+
+			if *game.RematchOfferedByID != playerID {
+
+				continue
+			}
+
+			game.RematchOfferedByID = nil
+
+			if err := db.DB.Save(&game).Error; err != nil {
+				log.Println(err.Error())
+
+				continue
+			}
+
+			opponentID := game.Player1ID
+
+			if game.Player1ID == playerID {
+
+				opponentID = game.Player2ID
+			}
+
+			if opponentOk && playerOk {
+				if err := db.DB.Save(&game).Error; err != nil {
+					log.Println(err.Error())
+
+					continue
+				}
+
+				offerRematchMessage := Message{
+					GameID:          int(game.ID),
+					Type:            "cancel_rematch",
+					IsDrawAvailable: true,
+				}
+
+				msg, err = json.Marshal(offerRematchMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					opponentWS.Close()
+					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
+			continue
+		}
+
+		if message.Type == "accept_rematch" {
+
+			p1 := Player{
+				UserID: game.Player1ID,
+			}
+
+			p2 := Player{
+				UserID: game.Player2ID,
+			}
+
+			game.RematchAcceptedByID = &playerID
+
+			if err := db.DB.Save(&game).Error; err != nil {
+				log.Println(err.Error())
+
+				continue
+			}
+
+			createGame(p1, p2, game.GameTypeID)
 			continue
 		}
 
