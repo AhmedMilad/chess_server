@@ -979,7 +979,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				opponentID = game.Player2ID
 			}
 
-			if opponentOk {
+			if playerOk && opponentOk {
 				if err := db.DB.Save(&game).Error; err != nil {
 					log.Println(err.Error())
 
@@ -988,7 +988,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 				offerRematchMessage := Message{
 					GameID:             int(game.ID),
-					Type:               "rematch_offered",
+					Type:               "rematch_available",
 					IsRematchAvailable: true,
 				}
 
@@ -1004,6 +1004,25 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					PlayerMutex.Lock()
 					opponentWS.Close()
 					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+				offerRematchMessage.Type = "rematch_offered"
+				offerRematchMessage.IsRematchAvailable = false
+				offerRematchMessage.IsRematchOffered = true
+
+				msg, err = json.Marshal(offerRematchMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
 					PlayerMutex.Unlock()
 				}
 
@@ -1044,7 +1063,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				offerRematchMessage := Message{
 					GameID:          int(game.ID),
 					Type:            "cancel_rematch",
-					IsDrawAvailable: true,
+					IsRematchOffered: false,
+					IsRematchAvailable: false,
 				}
 
 				msg, err = json.Marshal(offerRematchMessage)
