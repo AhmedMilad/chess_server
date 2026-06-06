@@ -248,8 +248,9 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 		return
 	}
 	serializedStr := string(serialized)
+	key := GetQueueKey(user.ID, gameTypeId)
 
-	exists, err := RDB.SIsMember(Ctx, "players_q_set", serializedStr).Result()
+	exists, err := RDB.SIsMember(Ctx, "players_q_set", key).Result()
 	if err != nil {
 		fmt.Println("Error checking set:", err)
 		return
@@ -261,7 +262,7 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 	}
 
 	pipe := RDB.TxPipeline()
-	pipe.SAdd(Ctx, "players_q_set", serializedStr)
+	pipe.SAdd(Ctx, "players_q_set", key)
 	pipe.RPush(Ctx, "players_q", serializedStr)
 	_, err = pipe.Exec(Ctx)
 	if err != nil {
@@ -270,6 +271,62 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 	}
 
 	fmt.Println("Player enqueued")
+}
+
+func DequeuePlayer(userId uint, gameTypeId int) error {
+
+	var user models.User
+	db.DB.Preload("Ratings.GameType").Preload("Setting").First(&user, userId)
+
+	var playerRating float64
+	for _, rating := range user.Ratings {
+		if rating.GameTypeID == uint(gameTypeId) {
+			playerRating = float64(rating.Rating)
+		}
+	}
+
+	player := Player{
+		UserID:               user.ID,
+		GameTypeID:           uint(gameTypeId),
+		Rating:               int(playerRating),
+		LowerBoundRatingDiff: int(user.Setting.LowerBoundPlayerRatingDiff),
+		UpperBoundRatingDiff: int(user.Setting.UpperBoundPlayerRatingDiff),
+	}
+
+	serialized, err := json.Marshal(player)
+	if err != nil {
+		return err
+	}
+
+	serializedStr := string(serialized)
+
+	pipe := RDB.TxPipeline()
+
+	// Remove from the uniqueness set
+	key := GetQueueKey(userId, gameTypeId)
+	pipe.SRem(Ctx, "players_q_set", key)
+
+	// Remove the first occurrence from the queue
+	pipe.LRem(Ctx, "players_q", 1, serializedStr)
+
+	_, err = pipe.Exec(Ctx)
+
+	fmt.Println("Player dequeued")
+	return err
+}
+
+func GetQueueKey(userID uint, gameTypeID int) string {
+	return fmt.Sprintf("%d:%d", userID, gameTypeID)
+}
+
+func IsPlayerWaiting(userID uint, gameTypeID int) (bool, error) {
+	key := fmt.Sprintf("%d:%d", userID, gameTypeID)
+
+	return RDB.SIsMember(
+		Ctx,
+		"players_q_set",
+		key,
+	).Result()
 }
 
 func MatchmakingWorker() {

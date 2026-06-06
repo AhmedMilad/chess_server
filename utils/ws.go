@@ -42,6 +42,7 @@ type Message struct {
 	IsDrawOffered       bool            `json:"is_draw_offered"`
 	IsRematchOffered    bool            `json:"is_rematch_offered"`
 	IsRematchAvailable  bool            `json:"is_rematch_available"`
+	IsNewGamePending    bool            `json:"is_new_game_pending"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -222,6 +223,13 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		}
 	}
 
+	isNewGamePending, err := IsPlayerWaiting(playerID, int(game.GameTypeID))
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
 	message := Message{
 		Type:         "reconnect_game",
 		GameID:       gameId,
@@ -248,6 +256,7 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		IsDrawOffered:       isDrawOffered,
 		IsRematchOffered:    isRematchOffered,
 		IsRematchAvailable:  isRematchAvailable,
+		IsNewGamePending:    isNewGamePending,
 	}
 
 	oppoonetPlayerID := game.Player2ID
@@ -1068,6 +1077,72 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			}
 
 			createGame(p1, p2, game.GameTypeID)
+			continue
+		}
+
+		if message.Type == "new_game" {
+
+			EnqueuePlayer(playerID, int(game.GameTypeID))
+
+			if playerOk {
+				newGameMessage := Message{
+					GameID: int(game.ID),
+					Type:   "pending_new_game",
+				}
+
+				msg, err = json.Marshal(newGameMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
+			continue
+		}
+
+		if message.Type == "cancel_new_game" {
+
+			err := DequeuePlayer(playerID, int(game.GameTypeID))
+
+			if err != nil {
+
+				log.Println(err)
+				continue
+			}
+
+			if playerOk {
+				cancelNewGameMessage := Message{
+					GameID: int(game.ID),
+					Type:   "cancel_new_game",
+				}
+
+				msg, err = json.Marshal(cancelNewGameMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
+					PlayerMutex.Unlock()
+				}
+
+			}
+
 			continue
 		}
 
