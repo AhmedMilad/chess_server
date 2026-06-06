@@ -388,7 +388,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				opponentID = game.Player2ID
 			}
 
-			if opponentOk {
+			if playerOk && opponentOk {
 				if err := db.DB.Save(&game).Error; err != nil {
 					log.Println(err.Error())
 
@@ -396,9 +396,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				offerDrawMessage := Message{
-					GameID:          int(game.ID),
-					Type:            "draw_offered",
-					IsDrawAvailable: true,
+					GameID: int(game.ID),
+					Type:   "draw_available",
 				}
 
 				msg, err = json.Marshal(offerDrawMessage)
@@ -413,6 +412,23 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					PlayerMutex.Lock()
 					opponentWS.Close()
 					delete(Players, opponentID)
+					PlayerMutex.Unlock()
+				}
+
+				offerDrawMessage.Type = "draw_offered"
+
+				msg, err = json.Marshal(offerDrawMessage)
+
+				if err != nil {
+
+					log.Println("Invalid message")
+					continue
+				}
+
+				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
+					PlayerMutex.Lock()
+					playerWS.Close()
+					delete(Players, playerID)
 					PlayerMutex.Unlock()
 				}
 
