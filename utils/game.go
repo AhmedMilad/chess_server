@@ -383,11 +383,15 @@ func MatchPlayer(playerRaw string) bool {
 			}
 
 			if candidate.GameTypeID == p.GameTypeID && mutualFit(p, candidate) {
+
+				pKey := GetQueueKey(p.UserID, int(p.GameTypeID))
+				candidateKey := GetQueueKey(candidate.UserID, int(candidate.GameTypeID))
+
 				pipe := tx.TxPipeline()
 				pipe.LRem(Ctx, "players_q", 1, raw)
 				pipe.LRem(Ctx, "players_q", 1, playerRaw)
-				pipe.SRem(Ctx, "players_q_set", raw)
-				pipe.SRem(Ctx, "players_q_set", playerRaw)
+				pipe.SRem(Ctx, "players_q_set", pKey)
+				pipe.SRem(Ctx, "players_q_set", candidateKey)
 				_, err := pipe.Exec(Ctx)
 
 				if err != nil {
