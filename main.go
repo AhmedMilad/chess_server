@@ -11,6 +11,7 @@ import (
 
 	"chess_server/utils"
 	"log"
+	"os"
 )
 
 func main() {
@@ -25,8 +26,11 @@ func main() {
 	utils.TrackWatches()
 	go utils.MatchmakingWorker()
 	router := gin.Default()
+
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{config.Config.Client},
+		AllowOriginFunc: func(origin string) bool {
+			return origin == config.Config.Client
+		},
 		AllowMethods:     []string{"POST", "GET", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -35,5 +39,5 @@ func main() {
 	}))
 
 	routes.ApiRoutes(router)
-	router.Run()
+	router.Run(os.Getenv("DOMAIN"))
 }
