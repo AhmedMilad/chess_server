@@ -644,6 +644,63 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 	playerID := game.Player1ID
 	var moveTime int64
 
+	castlingStatus := ""
+	tmpStatus := ""
+
+	if playerGameState.UserID == game.Player1ID {
+
+		if playerGameState.CanKingSideCastle {
+			tmpStatus += "K"
+		}
+
+		if playerGameState.CanLongCastle {
+			tmpStatus += "Q"
+		}
+
+		if opponentGameState.CanKingSideCastle {
+			tmpStatus += "k"
+		}
+
+		if opponentGameState.CanLongCastle {
+			tmpStatus += "q"
+		}
+
+	} else {
+
+		if playerGameState.CanKingSideCastle {
+			tmpStatus += "k"
+		}
+
+		if playerGameState.CanLongCastle {
+			tmpStatus += "q"
+		}
+
+		if opponentGameState.CanKingSideCastle {
+			tmpStatus += "K"
+		}
+
+		if opponentGameState.CanLongCastle {
+			tmpStatus += "Q"
+		}
+
+	}
+
+	if strings.Contains(tmpStatus, "K") {
+		castlingStatus += "K"
+	}
+
+	if strings.Contains(tmpStatus, "Q") {
+		castlingStatus += "Q"
+	}
+
+	if strings.Contains(tmpStatus, "k") {
+		castlingStatus += "k"
+	}
+
+	if strings.Contains(tmpStatus, "q") {
+		castlingStatus += "q"
+	}
+
 	if game.PlayerTurn == 1 {
 		timeTaken := curTimeStamp - game.Player1LastMoveAt
 		timeSpent := int64(math.Max(0, float64(timeTaken-graceLagTime)))
@@ -675,6 +732,8 @@ func GenericHandleMove(game *models.Game, gameMove *models.GameMove, playerGameS
 	gameMove.GameID = game.ID
 	gameMove.Board = game.Board
 	gameMove.MoveTime = moveTime
+	gameMove.EnpassantSquare = &playerGameState.Enpassant
+	gameMove.CastlingStatus = &castlingStatus
 
 	return nil
 }
