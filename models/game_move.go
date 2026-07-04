@@ -17,6 +17,7 @@ type GameMove struct {
 	Notation        string  `gorm:"size:14;not null"`
 	EnpassantSquare *string `gorm:"size:12"`
 	CastlingStatus  *string `gorm:"size:12"`
+	MoveClass       *string `gorm:"type:varchar(20);default:null"`
 	CentiPawn       *float64
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
