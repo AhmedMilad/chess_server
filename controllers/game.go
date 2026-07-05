@@ -410,10 +410,13 @@ func AnalyzeGame(c *gin.Context) {
 
 				whiteJustMoved := i%2 == 0
 
-				loss := EvaluationLoss(bestEval, playedEval, whiteJustMoved)
-				moveClass = ClassifyMove(loss)
-				mc := moveClass
-				gameMoves[i].MoveClass = &mc
+				// skip the first player moves classification
+				if i > 1 {
+					loss := EvaluationLoss(bestEval, playedEval, whiteJustMoved)
+					moveClass = ClassifyMove(loss)
+					mc := moveClass
+					gameMoves[i].MoveClass = &mc
+				}
 			}
 		}
 
