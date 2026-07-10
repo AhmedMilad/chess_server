@@ -34,7 +34,7 @@ type Message struct {
 	MyTime              uint64          `json:"my_time"`
 	OpponentTime        uint64          `json:"opponent_time"`
 	MoveNotation        string          `json:"move_notation"`
-	Moves               []string        `json:"moves"`
+	Moves               []MovesHistory  `json:"movesHistory"`
 	PromoteTo           string          `json:"promote_to"`
 	MyPointsDelta       float64         `json:"my_points_delta"`
 	OpponentPointsDelta float64         `json:"opponent_points_delta"`
@@ -43,6 +43,13 @@ type Message struct {
 	IsRematchOffered    bool            `json:"is_rematch_offered"`
 	IsRematchAvailable  bool            `json:"is_rematch_available"`
 	IsNewGamePending    bool            `json:"is_new_game_pending"`
+}
+
+type MovesHistory struct {
+	Board        string `json:"board"`
+	From         string `json:"from"`
+	To           string `json:"to"`
+	MoveNotation string `json:"move_notation"`
 }
 
 func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
@@ -193,13 +200,23 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 
 	}
 
-	var moves []string
+	var moves []MovesHistory
 	var playerRating models.UserGameRating
 	var opponentRating models.UserGameRating
+	var gameMoves []models.GameMove
 
-	db.DB.Model(&models.GameMove{}).Where("game_id = ?", game.ID).Order("id asc").Pluck("notation", &moves)
+	db.DB.Model(&models.GameMove{}).Where("game_id = ?", game.ID).Order("id asc").Find(&gameMoves)
 	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", playerID, game.GameTypeID).First(&playerRating)
 	db.DB.Preload("User").Where("user_id = ? AND game_type_id = ?", opponentID, game.GameTypeID).First(&opponentRating)
+
+	for _, gm := range gameMoves {
+		moves = append(moves, MovesHistory{
+			Board:        gm.Board,
+			From:         gm.From,
+			To:           gm.To,
+			MoveNotation: gm.Notation,
+		})
+	}
 
 	isDrawAvailable := false
 	isDrawOffered := false
@@ -1061,9 +1078,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				}
 
 				offerRematchMessage := Message{
-					GameID:          int(game.ID),
-					Type:            "cancel_rematch",
-					IsRematchOffered: false,
+					GameID:             int(game.ID),
+					Type:               "cancel_rematch",
+					IsRematchOffered:   false,
 					IsRematchAvailable: false,
 				}
 
