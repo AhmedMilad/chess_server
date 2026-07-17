@@ -251,6 +251,11 @@ func AnalyzeGame(c *gin.Context) {
 		return
 	}
 
+	if user.ID != game.Player1ID && user.ID != game.Player2ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Not a participant in this game"})
+		return
+	}
+
 	gameStatus := "draw"
 
 	if game.Status != "draw" {
@@ -333,6 +338,14 @@ func AnalyzeGame(c *gin.Context) {
 		enPassSqr := "-"
 		if gameMoves[i].EnpassantSquare != nil && *gameMoves[i].EnpassantSquare != " " {
 			enPassSqr = *gameMoves[i].EnpassantSquare
+
+			if len(enPassSqr) > 1 && enPassSqr[1] == '4' {
+				enPassSqr = enPassSqr[:1] + "3"
+			}
+
+			if len(enPassSqr) > 1 && enPassSqr[1] == '5' {
+				enPassSqr = enPassSqr[:1] + "6"
+			}
 		}
 
 		postFEN := buildFEN(gameMoves[i].Board, castlingStatus, enPassSqr, t, postFullmove)
@@ -354,6 +367,14 @@ func AnalyzeGame(c *gin.Context) {
 			prevEnpassant := "-"
 			if gameMoves[i-1].EnpassantSquare != nil && *gameMoves[i-1].EnpassantSquare != " " {
 				prevEnpassant = *gameMoves[i-1].EnpassantSquare
+
+				if len(prevEnpassant) > 1 && prevEnpassant[1] == '4' {
+					prevEnpassant = prevEnpassant[:1] + "3"
+				}
+
+				if len(prevEnpassant) > 1 && prevEnpassant[1] == '5' {
+					prevEnpassant = prevEnpassant[:1] + "6"
+				}
 			}
 			prevFEN = buildFEN(gameMoves[i-1].Board, prevCastling, prevEnpassant, sideBeforeMove, fullmoveBeforeMove)
 		}
@@ -363,7 +384,7 @@ func AnalyzeGame(c *gin.Context) {
 		alreadyAnalyzed := gameMoves[i].CentiPawn != nil && gameMoves[i].MoveClass != nil
 
 		if alreadyAnalyzed {
-			// Nothing changed here: fully cached result, skip the engine.
+			// Fully cached result, skip the engine.
 			finalScore = *gameMoves[i].CentiPawn
 			moveClass = *gameMoves[i].MoveClass
 		} else {
@@ -408,24 +429,23 @@ func AnalyzeGame(c *gin.Context) {
 					continue
 				}
 
-				whiteJustMoved := i%2 == 0
+				whiteMoved := i%2 == 0
 
-				// skip the first player moves classification
-				if i > 1 {
-					loss := EvaluationLoss(bestEval, playedEval, whiteJustMoved)
-					moveClass = ClassifyMove(loss)
-					mc := moveClass
-					gameMoves[i].MoveClass = &mc
-				}
+				loss := EvaluationLoss(bestEval, playedEval, whiteMoved)
+				moveClass = ClassifyMove(loss)
+				mc := moveClass
+				gameMoves[i].MoveClass = &mc
 			}
 		}
 
 		isPlayersMove := gameMoves[i].PlayerID == user.ID
 
-		if isPlayersMove {
-			IncrementSummary(&playerSummary, moveClass)
-		} else {
-			IncrementSummary(&opponentSummary, moveClass)
+		if i > 1 {
+			if isPlayersMove {
+				IncrementSummary(&playerSummary, moveClass)
+			} else {
+				IncrementSummary(&opponentSummary, moveClass)
+			}
 		}
 
 		resp = append(resp, GameAnalysis{
