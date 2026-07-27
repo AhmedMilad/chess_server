@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
 var Ctx context.Context
@@ -141,8 +142,8 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 
 	if err != nil {
 		PlayerMutex.Lock()
-		Players[p1.UserID].Close()
-		delete(Players, p1.UserID)
+		Sessions[p1.UserID].Conn.Close()
+		delete(Sessions, p1.UserID)
 		PlayerMutex.Unlock()
 	}
 
@@ -186,28 +187,28 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 	player2Data, _ := json.Marshal(&player2Notification)
 
 	PlayerMutex.Lock()
-	player1WS, ok := Players[p1.UserID]
+	player1WS, ok := Sessions[p1.UserID]
 	PlayerMutex.Unlock()
 
 	if ok {
-		if err := player1WS.WriteMessage(websocket.TextMessage, []byte(player1Data)); err != nil {
+		if err := player1WS.Conn.WriteMessage(websocket.TextMessage, []byte(player1Data)); err != nil {
 			PlayerMutex.Lock()
-			Players[p1.UserID].Close()
-			delete(Players, p1.UserID)
+			Sessions[p1.UserID].Conn.Close()
+			delete(Sessions, p1.UserID)
 			PlayerMutex.Unlock()
 		}
 
 	}
 
 	PlayerMutex.Lock()
-	player2WS, ok := Players[p2.UserID]
+	player2WS, ok := Sessions[p2.UserID]
 	PlayerMutex.Unlock()
 
 	if ok {
-		if err := player2WS.WriteMessage(websocket.TextMessage, []byte(player2Data)); err != nil {
+		if err := player2WS.Conn.WriteMessage(websocket.TextMessage, []byte(player2Data)); err != nil {
 			PlayerMutex.Lock()
-			Players[p2.UserID].Close()
-			delete(Players, p2.UserID)
+			Sessions[p2.UserID].Conn.Close()
+			delete(Sessions, p2.UserID)
 			PlayerMutex.Unlock()
 		}
 
@@ -3406,19 +3407,19 @@ func calculateNewRD(playerID uint, currentRD float64, historyGames []models.Game
 	return math.Sqrt(1 / ((1 / math.Pow(currentRD, 2)) + (1 / dSquared)))
 }
 
-func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.UserGameRating) error {
+func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.UserGameRating, tx *gorm.DB) error {
 
 	var playerHistoryGames []models.Game
 
 	gameTypeID := game.GameTypeID
 
-	if err := db.DB.
+	if err := tx.
 		Where("user_id = ? AND game_type_id = ?", playerID, gameTypeID).
 		First(playerRating).Error; err != nil {
 		return err
 	}
 
-	err := db.DB.
+	err := tx.
 		Where(
 			"(player1_id = ? OR player2_id = ?) AND status IN ('finished', 'draw') AND updated_at > ? AND game_type_id = ?",
 			playerID,
@@ -3454,7 +3455,7 @@ func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.U
 
 	playerRating.RatingLastUpdatedAt = now
 
-	if err := db.DB.Save(playerRating).Error; err != nil {
+	if err := tx.Save(playerRating).Error; err != nil {
 		return err
 	}
 
@@ -3465,7 +3466,7 @@ func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.U
 		game.Player2PointsDelta = playerRating.Rating - oldRating
 	}
 
-	if err := db.DB.Save(game).Error; err != nil {
+	if err := tx.Save(game).Error; err != nil {
 
 		return err
 	}

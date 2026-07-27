@@ -11,9 +11,16 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
-var Players = make(map[uint]*websocket.Conn)
+type Session struct {
+	Conn           *websocket.Conn
+	LastSeen       time.Time
+	IsDisconnected bool
+}
+
+var Sessions = make(map[uint]Session)
 var Upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true }, // Allow all connections
 }
@@ -52,45 +59,36 @@ type MovesHistory struct {
 	MoveNotation string `json:"move_notation"`
 }
 
-func HandleConnection(playerId uint, w http.ResponseWriter, r *http.Request) {
+func HandleConnection(playerID uint, w http.ResponseWriter, r *http.Request) {
 	ws, err := Upgrader.Upgrade(w, r, nil)
-	defer func() {
-		PlayerMutex.Lock()
-		delete(Players, playerId)
-		PlayerMutex.Unlock()
-		ws.Close()
-	}()
 	if err != nil {
+		log.Printf("upgrade failed for player %d: %v", playerID, err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		removeSessionIfCurrent(playerID, ws)
+		ws.Close()
+	}()
 
-	PlayerMutex.Lock()
-	Players[playerId] = ws
-	PlayerMutex.Unlock()
-
-	HandleSocketMessages(playerId, ws)
-
+	RegisterConnection(playerID, ws)
+	HandleSocketMessages(playerID, ws)
 }
 
 func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *http.Request) {
 	ws, err := Upgrader.Upgrade(w, r, nil)
-	defer func() {
-		PlayerMutex.Lock()
-		delete(Players, playerID)
-		PlayerMutex.Unlock()
-		ws.Close()
-	}()
+
 	if err != nil {
+		log.Printf("upgrade failed for player %d: %v", playerID, err)
 		return
 	}
-	defer ws.Close()
-	PlayerMutex.Lock()
 
-	delete(Players, playerID)
-	Players[playerID] = ws
+	defer func() {
+		removeSessionIfCurrent(playerID, ws)
+		ws.Close()
+	}()
 
-	PlayerMutex.Unlock()
+	removeSessionIfCurrent(playerID, ws)
+	RegisterConnection(playerID, ws)
 
 	var game models.Game
 	if err := db.DB.Preload("Player1").Preload("Player2").First(&game, gameId).Error; err != nil {
@@ -303,15 +301,13 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 	}
 
 	PlayerMutex.Lock()
-	opponentWS, ok := Players[playerID]
+	opponentWS, ok := Sessions[playerID]
 	PlayerMutex.Unlock()
 
 	if ok {
-		if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-			opponentWS.Close()
-			PlayerMutex.Lock()
-			delete(Players, playerID)
-			PlayerMutex.Unlock()
+		if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			opponentWS.Conn.Close()
+				removeSessionIfCurrent(playerID, ws)
 		}
 	}
 
@@ -324,9 +320,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		_, msg, err := ws.ReadMessage()
 
 		if err != nil {
-			PlayerMutex.Lock()
-			delete(Players, playerID)
-			PlayerMutex.Unlock()
+			log.Printf("player %d read error: %v", playerID, err)
+			removeSessionIfCurrent(playerID, ws)
 			break
 		}
 
@@ -361,8 +356,8 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 
 		PlayerMutex.Lock()
 
-		opponentWS, opponentOk := Players[opponentID]
-		playerWS, playerOk := Players[currentPlayerID]
+		opponentWS, opponentOk := Sessions[opponentID]
+		playerWS, playerOk := Sessions[currentPlayerID]
 
 		PlayerMutex.Unlock()
 
@@ -425,11 +420,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 				offerDrawMessage.Type = "draw_offered"
@@ -442,11 +435,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
 			}
@@ -497,18 +488,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 			}
@@ -559,18 +546,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 			}
@@ -676,17 +659,27 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			db.DB.Where("id = ?", currentPlayerID).First(&player1)
 			db.DB.Where("id = ?", opponentID).First(&player2)
 
-			err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
+			err := db.DB.Transaction(func(tx *gorm.DB) error {
+				err := updatePlayerRating(currentPlayerID, &game, &player1Rating, tx)
+
+				if err != nil {
+					log.Println(err)
+
+					return err
+				}
+
+				err = updatePlayerRating(opponentID, &game, &player2Rating, tx)
+
+				if err != nil {
+					log.Println(err)
+					return err
+				}
+
+				return nil
+			})
 
 			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			err = updatePlayerRating(opponentID, &game, &player2Rating)
-
-			if err != nil {
-				log.Println(err)
+				log.Println("Could not update players rating")
 				continue
 			}
 
@@ -728,11 +721,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				continue
 			}
 
-			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				PlayerMutex.Lock()
-				playerWS.Close()
-				delete(Players, playerID)
-				PlayerMutex.Unlock()
+			if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				playerWS.Conn.Close()
+				removeSessionIfCurrent(playerID, ws)
 			}
 
 			drawMessage.MyTime = uint64(opponentTime)
@@ -759,11 +750,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				continue
 			}
 
-			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				PlayerMutex.Lock()
-				opponentWS.Close()
-				delete(Players, opponentID)
-				PlayerMutex.Unlock()
+			if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				opponentWS.Conn.Close()
+				removeSessionIfCurrent(opponentID, ws)
 			}
 
 			continue
@@ -863,17 +852,27 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			db.DB.Where("id = ?", currentPlayerID).First(&player1)
 			db.DB.Where("id = ?", opponentID).First(&player2)
 
-			err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
+			err := db.DB.Transaction(func(tx *gorm.DB) error {
+				err := updatePlayerRating(currentPlayerID, &game, &player1Rating, tx)
+
+				if err != nil {
+					log.Println(err)
+
+					return err
+				}
+
+				err = updatePlayerRating(opponentID, &game, &player2Rating, tx)
+
+				if err != nil {
+					log.Println(err)
+					return err
+				}
+
+				return nil
+			})
 
 			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			err = updatePlayerRating(opponentID, &game, &player2Rating)
-
-			if err != nil {
-				log.Println(err)
+				log.Println("Could not update players rating")
 				continue
 			}
 
@@ -915,11 +914,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				continue
 			}
 
-			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				PlayerMutex.Lock()
-				playerWS.Close()
-				delete(Players, playerID)
-				PlayerMutex.Unlock()
+			if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				playerWS.Conn.Close()
+				removeSessionIfCurrent(playerID, ws)
 			}
 
 			resignMessage.MyTime = uint64(opponentTime)
@@ -947,11 +944,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				continue
 			}
 
-			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				PlayerMutex.Lock()
-				opponentWS.Close()
-				delete(Players, opponentID)
-				PlayerMutex.Unlock()
+			if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				opponentWS.Conn.Close()
+				removeSessionIfCurrent(opponentID, ws)
 			}
 
 			continue
@@ -1017,11 +1012,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 				offerRematchMessage.Type = "rematch_offered"
@@ -1036,11 +1029,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
 			}
@@ -1092,18 +1083,14 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 			}
@@ -1151,11 +1138,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
 			}
@@ -1187,11 +1172,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
 			}
@@ -1203,7 +1186,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		if game.Status != "ongoing" || game.Player1RemainingTime == 0 {
 
 			PlayerMutex.Lock()
-			playerWS, ok := Players[playerID]
+			playerWS, ok := Sessions[playerID]
 			PlayerMutex.Unlock()
 
 			if ok {
@@ -1226,11 +1209,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					playerWS.Close()
-					PlayerMutex.Lock()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 			}
 			continue
@@ -1282,7 +1263,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 			// send only to the player who made the action
 
 			PlayerMutex.Lock()
-			playerWS, ok := Players[currentPlayerID]
+			playerWS, ok := Sessions[currentPlayerID]
 			PlayerMutex.Unlock()
 
 			if ok {
@@ -1298,11 +1279,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					playerWS.Close()
-					PlayerMutex.Lock()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 			}
 
@@ -1395,17 +1374,27 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					return
 				}
 
-				err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
+				err := db.DB.Transaction(func(tx *gorm.DB) error {
+					err := updatePlayerRating(currentPlayerID, &game, &player1Rating, tx)
+
+					if err != nil {
+						log.Println(err)
+
+						return err
+					}
+
+					err = updatePlayerRating(opponentID, &game, &player2Rating, tx)
+
+					if err != nil {
+						log.Println(err)
+						return err
+					}
+
+					return nil
+				})
 
 				if err != nil {
-					log.Println(err)
-					continue
-				}
-
-				err = updatePlayerRating(opponentID, &game, &player2Rating)
-
-				if err != nil {
-					log.Println(err)
+					log.Println("Could not update players rating")
 					continue
 				}
 
@@ -1447,11 +1436,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
 				checkMateMessage.Status = "defeat"
@@ -1480,11 +1467,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 				continue
@@ -1545,17 +1530,27 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				db.DB.Where("id = ?", currentPlayerID).First(&player1)
 				db.DB.Where("id = ?", opponentID).First(&player2)
 
-				err = updatePlayerRating(currentPlayerID, &game, &player1Rating)
+				err := db.DB.Transaction(func(tx *gorm.DB) error {
+					err := updatePlayerRating(currentPlayerID, &game, &player1Rating, tx)
+
+					if err != nil {
+						log.Println(err)
+
+						return err
+					}
+
+					err = updatePlayerRating(opponentID, &game, &player2Rating, tx)
+
+					if err != nil {
+						log.Println(err)
+						return err
+					}
+
+					return nil
+				})
 
 				if err != nil {
-					log.Println(err)
-					continue
-				}
-
-				err = updatePlayerRating(opponentID, &game, &player2Rating)
-
-				if err != nil {
-					log.Println(err)
+					log.Println("Could not update players rating")
 					continue
 				}
 
@@ -1598,11 +1593,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					playerWS.Close()
-					delete(Players, playerID)
-					PlayerMutex.Unlock()
+				if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					playerWS.Conn.Close()
+					removeSessionIfCurrent(playerID, ws)
 				}
 
 				drawMessage.MyTime = uint64(t2)
@@ -1629,11 +1622,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 					continue
 				}
 
-				if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-					PlayerMutex.Lock()
-					opponentWS.Close()
-					delete(Players, opponentID)
-					PlayerMutex.Unlock()
+				if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					opponentWS.Conn.Close()
+					removeSessionIfCurrent(opponentID, ws)
 				}
 
 				continue
@@ -1661,11 +1652,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				continue
 			}
 
-			if err := opponentWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				PlayerMutex.Lock()
-				opponentWS.Close()
-				delete(Players, opponentID)
-				PlayerMutex.Unlock()
+			if err := opponentWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				opponentWS.Conn.Close()
+				removeSessionIfCurrent(opponentID, ws)
 			}
 		}
 
@@ -1688,11 +1677,9 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				continue
 			}
 
-			if err := playerWS.WriteMessage(websocket.TextMessage, msg); err != nil {
-				PlayerMutex.Lock()
-				playerWS.Close()
-				delete(Players, playerID)
-				PlayerMutex.Unlock()
+			if err := playerWS.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				playerWS.Conn.Close()
+				removeSessionIfCurrent(playerID, ws)
 			}
 		}
 

@@ -4,10 +4,12 @@ import (
 	"chess_server/config"
 	"chess_server/database"
 	"chess_server/routes"
+	"context"
+	"time"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"time"
 
 	"chess_server/utils"
 	"log"
@@ -24,7 +26,11 @@ func main() {
 	utils.InitGame()
 	utils.InitRedis()
 	utils.TrackWatches()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	go utils.MatchmakingWorker()
+	go utils.StartConnectionChecker(ctx, 5*time.Second)
+
 	router := gin.Default()
 
 	router.Use(cors.New(cors.Config{

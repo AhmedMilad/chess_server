@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 
 	"encoding/json"
 
@@ -106,8 +107,8 @@ func TrackWatches() {
 					}
 
 					PlayerMutex.Lock()
-					wWS := Players[wID]
-					lWS := Players[lID]
+					wWS := Sessions[wID]
+					lWS := Sessions[lID]
 					PlayerMutex.Unlock()
 
 					var player1Rating models.UserGameRating
@@ -125,18 +126,27 @@ func TrackWatches() {
 						return
 					}
 
-					err := updatePlayerRating(wID, &game, &player1Rating)
+					err := db.DB.Transaction(func(tx *gorm.DB) error {
+						err := updatePlayerRating(wID, &game, &player1Rating, tx)
+
+						if err != nil {
+							log.Println(err)
+
+							return err
+						}
+
+						err = updatePlayerRating(lID, &game, &player2Rating, tx)
+
+						if err != nil {
+							log.Println(err)
+							return err
+						}
+
+						return nil
+					})
 
 					if err != nil {
-						log.Println(err)
-
-						return
-					}
-
-					err = updatePlayerRating(lID, &game, &player2Rating)
-
-					if err != nil {
-						log.Println(err)
+						log.Println("Could not update players rating")
 						return
 					}
 
@@ -181,11 +191,11 @@ func TrackWatches() {
 						return
 					}
 
-					if wWS != nil {
-						if err := wWS.WriteMessage(websocket.TextMessage, msg1); err != nil {
-							wWS.Close()
+					if wWS.Conn != nil {
+						if err := wWS.Conn.WriteMessage(websocket.TextMessage, msg1); err != nil {
+							wWS.Conn.Close()
 							PlayerMutex.Lock()
-							delete(Players, wID)
+							delete(Sessions, wID)
 							PlayerMutex.Unlock()
 						}
 					}
@@ -214,11 +224,11 @@ func TrackWatches() {
 						return
 					}
 
-					if lWS != nil {
-						if err := lWS.WriteMessage(websocket.TextMessage, msg2); err != nil {
-							lWS.Close()
+					if lWS.Conn != nil {
+						if err := lWS.Conn.WriteMessage(websocket.TextMessage, msg2); err != nil {
+							lWS.Conn.Close()
 							PlayerMutex.Lock()
-							delete(Players, lID)
+							delete(Sessions, lID)
 							PlayerMutex.Unlock()
 						}
 					}
