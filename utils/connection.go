@@ -65,7 +65,7 @@ func CheckConnection() {
 				Sessions[p1ID] = p1Session
 				PlayerMutex.Unlock()
 
-				sendMessage(ConnMessage{
+				SendMessage(ConnMessage{
 					Type: "opponent_disconnected",
 				}, p2ID, p2Session)
 			}
@@ -81,7 +81,7 @@ func CheckConnection() {
 				Sessions[p2ID] = p2Session
 				PlayerMutex.Unlock()
 
-				sendMessage(ConnMessage{
+				SendMessage(ConnMessage{
 					Type: "opponent_disconnected",
 				}, p1ID, p1Session)
 			}
@@ -101,10 +101,13 @@ func CheckConnection() {
 	}
 }
 
-func sendMessage(message ConnMessage, pID uint, session Session) error {
+func SendMessage(message ConnMessage, pID uint, session Session) error {
+
+	if session.Conn == nil {
+		return nil
+	}
 
 	msg, err := json.Marshal(message)
-
 	if err != nil {
 		log.Println("Invalid message")
 		return err
@@ -112,10 +115,7 @@ func sendMessage(message ConnMessage, pID uint, session Session) error {
 
 	if err := session.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 		session.Conn.Close()
-		PlayerMutex.Lock()
-		delete(Sessions, pID)
-		PlayerMutex.Unlock()
-
+		removeSessionIfCurrent(pID, session.Conn)
 		return err
 	}
 
@@ -329,7 +329,6 @@ func RegisterConnection(pID uint, conn *websocket.Conn) {
 	conn.SetReadDeadline(time.Now().Add(pongWait))
 
 	conn.SetPongHandler(func(appData string) error {
-		log.Printf("pong received from player %d at %v", pID, time.Now())
 		conn.SetReadDeadline(time.Now().Add(pongWait))
 
 		PlayerMutex.Lock()
@@ -345,8 +344,9 @@ func RegisterConnection(pID uint, conn *websocket.Conn) {
 
 	PlayerMutex.Lock()
 	Sessions[pID] = Session{
-		Conn:     conn,
-		LastSeen: time.Now(),
+		Conn:           conn,
+		LastSeen:       time.Now(),
+		IsDisconnected: false,
 	}
 	PlayerMutex.Unlock()
 
