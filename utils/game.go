@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -3294,75 +3295,19 @@ func getQueenMoveNotation(fromX, fromY, toX, toY int, board *[8][8]string) (stri
 
 }
 
-const q = 0.0057565 // ln(10) / 400
+const q = 0.0057565                  // ln(10) / 400
+const ratingPeriod = 168 * time.Hour // 1 week
 
-func calculateRD(rd float64, lastCompDate time.Time) float64 {
-
-	c := 34.64 // 34.64 means that it requires 100 week to go from 50 to 350 deviation
-
-	elapsed := time.Since(lastCompDate)
-	t := elapsed.Hours() / 168
+func calculateRD(rd float64, periodsElapsed float64) float64 {
+	c := 34.64 // c=34.64 => 50->350 deviation over 100 weeks
 	rdSqr := math.Pow(rd, 2)
-
-	return math.Min(350, math.Sqrt(rdSqr+math.Pow(c, 2)*t))
-}
-
-func calculateRating(playerID uint, currentPlayerRating, currentRD float64, historyGames []models.Game) (float64, error) {
-
-	if len(historyGames) == 0 {
-		return currentPlayerRating, nil
-	}
-
-	// calculate players rating using Glicko 1 formula.
-
-	ds := float64(0)
-	rs := float64(0)
-
-	for _, prvGame := range historyGames {
-
-		ord := prvGame.Player2RatingDeviation
-
-		if playerID == prvGame.Player2ID {
-			ord = prvGame.Player1RatingDeviation
-		}
-
-		playerRating := prvGame.Player1Rating
-		opponentRating := prvGame.Player2Rating
-
-		if playerID == prvGame.Player2ID {
-			playerRating = prvGame.Player2Rating
-			opponentRating = prvGame.Player1Rating
-
-		}
-
-		ds += d(ord, playerRating, opponentRating)
-
-		s := 0.5
-		if prvGame.WinnerID != nil {
-
-			s = 1
-			if *prvGame.WinnerID != playerID {
-				s = 0
-			}
-		}
-
-		rs += g(ord) * (s - e(ord, playerRating, opponentRating))
-
-	}
-
-	fDs := math.Pow(q, 2) * ds
-	dv := math.Pow(fDs, -1)
-	newR := currentPlayerRating + q/((1/math.Pow(currentRD, 2))+1/dv)*rs
-
-	return newR, nil
+	return math.Min(350, math.Sqrt(rdSqr+math.Pow(c, 2)*periodsElapsed))
 }
 
 func g(rd float64) float64 {
-
-	rd = math.Pow(rd, 2)
+	rdSqr := math.Pow(rd, 2)
 	pi := math.Pi
-
-	return 1 / math.Sqrt(1+(3*math.Pow(q, 2)*rd)/math.Pow(pi, 2))
+	return 1 / math.Sqrt(1+(3*math.Pow(q, 2)*rdSqr)/math.Pow(pi, 2))
 }
 
 func e(rd float64, r float64, rj float64) float64 {
@@ -3370,45 +3315,53 @@ func e(rd float64, r float64, rj float64) float64 {
 }
 
 func d(rd float64, r float64, rj float64) float64 {
-
-	e := e(rd, r, rj)
-	return math.Pow(g(rd), 2) * e * (1 - e)
+	eVal := e(rd, r, rj)
+	return math.Pow(g(rd), 2) * eVal * (1 - eVal)
 }
 
-func calculateNewRD(playerID uint, currentRD float64, historyGames []models.Game) float64 {
-
+func calculateNewRatingAndRD(playerID uint, currentPlayerRating, currentRD float64, historyGames []models.Game) (float64, float64, error) {
 	if len(historyGames) == 0 {
-		return currentRD
+		return currentPlayerRating, currentRD, nil
 	}
 
 	ds := float64(0)
+	rs := float64(0)
 
 	for _, prvGame := range historyGames {
-
 		ord := prvGame.Player2RatingDeviation
-
-		if playerID == prvGame.Player2ID {
-			ord = prvGame.Player1RatingDeviation
-		}
-
-		playerRating := prvGame.Player1Rating
 		opponentRating := prvGame.Player2Rating
 
 		if playerID == prvGame.Player2ID {
-			playerRating = prvGame.Player2Rating
+			ord = prvGame.Player1RatingDeviation
 			opponentRating = prvGame.Player1Rating
 		}
 
-		ds += d(ord, playerRating, opponentRating)
+		ds += d(ord, currentPlayerRating, opponentRating)
+
+		s := 0.5
+		if prvGame.WinnerID != nil {
+			s = 1
+			if *prvGame.WinnerID != playerID {
+				s = 0
+			}
+		}
+
+		rs += g(ord) * (s - e(ord, currentPlayerRating, opponentRating))
+	}
+
+	if ds == 0 {
+		return currentPlayerRating, currentRD, nil
 	}
 
 	dSquared := 1 / (math.Pow(q, 2) * ds)
 
-	return math.Sqrt(1 / ((1 / math.Pow(currentRD, 2)) + (1 / dSquared)))
+	newRating := currentPlayerRating + q/((1/math.Pow(currentRD, 2))+1/dSquared)*rs
+	newRD := math.Max(30, math.Sqrt(1/((1/math.Pow(currentRD, 2))+(1/dSquared))))
+
+	return newRating, newRD, nil
 }
 
 func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.UserGameRating, tx *gorm.DB) error {
-
 	var playerHistoryGames []models.Game
 
 	gameTypeID := game.GameTypeID
@@ -3435,25 +3388,58 @@ func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.U
 		return err
 	}
 
-	playerAdjustedRD := calculateRD(
-		playerRating.Deviation,
-		playerRating.RatingLastUpdatedAt,
-	)
-
 	oldRating := playerRating.Rating
+	currentRating := playerRating.Rating
+	currentRD := playerRating.Deviation
+	cursor := playerRating.RatingLastUpdatedAt
 
-	playerRating.Rating, err = calculateRating(playerID, playerRating.Rating, playerAdjustedRD, playerHistoryGames)
+	if len(playerHistoryGames) == 0 {
+		periods := time.Since(cursor).Seconds() / ratingPeriod.Seconds()
+		currentRD = calculateRD(currentRD, periods)
+	} else {
 
-	if err != nil {
-		log.Println(err.Error())
-		return err
+		bucketsByIndex := make(map[int64][]models.Game)
+		var order []int64
+
+		for _, histGame := range playerHistoryGames {
+			idx := int64(histGame.UpdatedAt.Sub(cursor) / ratingPeriod)
+			if _, ok := bucketsByIndex[idx]; !ok {
+				order = append(order, idx)
+			}
+			bucketsByIndex[idx] = append(bucketsByIndex[idx], histGame)
+		}
+		sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
+
+		lastIdx := int64(-1)
+		for _, idx := range order {
+			periodsElapsed := float64(idx - lastIdx)
+			currentRD = calculateRD(currentRD, periodsElapsed)
+
+			var err error
+			currentRating, currentRD, err = calculateNewRatingAndRD(
+				playerID,
+				currentRating,
+				currentRD,
+				bucketsByIndex[idx],
+			)
+			if err != nil {
+				log.Println(err.Error())
+				return err
+			}
+
+			lastIdx = idx
+		}
+
+		periodBoundaryTime := cursor.Add(time.Duration(lastIdx+1) * ratingPeriod)
+		remaining := time.Since(periodBoundaryTime).Seconds() / ratingPeriod.Seconds()
+		if remaining > 0 {
+			currentRD = calculateRD(currentRD, remaining)
+		}
 	}
 
-	playerRating.Deviation = calculateNewRD(playerID, playerAdjustedRD, playerHistoryGames)
-
-	now := time.Now()
-
-	playerRating.RatingLastUpdatedAt = now
+	playerRating.Rating = currentRating
+	playerRating.Deviation = currentRD
+	playerRating.RatingLastUpdatedAt = time.Now()
 
 	if err := tx.Save(playerRating).Error; err != nil {
 		return err
@@ -3462,12 +3448,10 @@ func updatePlayerRating(playerID uint, game *models.Game, playerRating *models.U
 	if playerID == game.Player1ID {
 		game.Player1PointsDelta = playerRating.Rating - oldRating
 	} else {
-
 		game.Player2PointsDelta = playerRating.Rating - oldRating
 	}
 
 	if err := tx.Save(game).Error; err != nil {
-
 		return err
 	}
 
