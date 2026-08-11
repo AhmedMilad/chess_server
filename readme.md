@@ -64,7 +64,6 @@ This project is split across two standalone repos:
 ### Prerequisites
 
 - Go 1.2x+
-- Node.js 1x+
 - PostgreSQL
 - Redis
 - Stockfish binary (for post-game analysis)
