@@ -74,7 +74,7 @@ This project is split across two standalone repos:
 Clone the repo:
 
 ```bash
-git clone <https://github.com/AhmedMilad/chess_server.git> chess_server
+git clone https://github.com/AhmedMilad/chess_server.git
 cd chess_server
 cp .env.example .env   # configure DB / Redis connection strings
 go mod tidy
