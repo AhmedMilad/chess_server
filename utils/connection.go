@@ -13,10 +13,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type ConnMessage struct {
-	Type string `json:"type"`
-}
-
 const (
 	pongWait   = 25 * time.Second
 	pingPeriod = (pongWait * 9) / 10 // send every 18 seconds
@@ -65,7 +61,7 @@ func CheckConnection() {
 				Sessions[p1ID] = p1Session
 				PlayerMutex.Unlock()
 
-				SendMessage(ConnMessage{
+				SendMessage(Message{
 					Type: "opponent_disconnected",
 				}, p2ID, p2Session)
 			}
@@ -81,7 +77,7 @@ func CheckConnection() {
 				Sessions[p2ID] = p2Session
 				PlayerMutex.Unlock()
 
-				SendMessage(ConnMessage{
+				SendMessage(Message{
 					Type: "opponent_disconnected",
 				}, p1ID, p1Session)
 			}
@@ -101,7 +97,7 @@ func CheckConnection() {
 	}
 }
 
-func SendMessage(message ConnMessage, pID uint, session Session) error {
+func SendMessage(message Message, pID uint, session Session) error {
 
 	if session.Conn == nil {
 		return nil

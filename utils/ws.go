@@ -26,30 +26,31 @@ var Upgrader = websocket.Upgrader{
 }
 
 type Message struct {
-	GameID              int             `json:"game_id"`
-	Type                string          `json:"type"`
-	Status              string          `json:"status"`
-	Color               string          `json:"color"`
-	Data                json.RawMessage `json:"data"`
-	Board               string          `json:"board"`
-	Turn                int             `json:"turn"`
-	CangLongCastle      bool            `json:"can_long_castle"`
-	CanKingSideCastle   bool            `json:"can_king_side_castle"`
-	EnpassantSquare     string          `json:"enpassant_square"`
-	OpponentInfo        PlayerInfo      `json:"opponent_info"`
-	MyInfo              PlayerInfo      `json:"my_info"`
-	MyTime              uint64          `json:"my_time"`
-	OpponentTime        uint64          `json:"opponent_time"`
-	MoveNotation        string          `json:"move_notation"`
-	Moves               []MovesHistory  `json:"movesHistory"`
-	PromoteTo           string          `json:"promote_to"`
-	MyPointsDelta       float64         `json:"my_points_delta"`
-	OpponentPointsDelta float64         `json:"opponent_points_delta"`
-	IsDrawAvailable     bool            `json:"is_draw_available"`
-	IsDrawOffered       bool            `json:"is_draw_offered"`
-	IsRematchOffered    bool            `json:"is_rematch_offered"`
-	IsRematchAvailable  bool            `json:"is_rematch_available"`
-	IsNewGamePending    bool            `json:"is_new_game_pending"`
+	GameID              int             `json:"game_id,omitempty"`
+	Type                string          `json:"type,omitempty"`
+	GameCategory        string          `json:"game_category,omitempty"`
+	Status              string          `json:"status,omitempty"`
+	Color               string          `json:"color,omitempty"`
+	Data                json.RawMessage `json:"data,omitempty"`
+	Board               string          `json:"board,omitempty"`
+	Turn                int             `json:"turn,omitempty"`
+	CangLongCastle      bool            `json:"can_long_castle,omitempty"`
+	CanKingSideCastle   bool            `json:"can_king_side_castle,omitempty"`
+	EnpassantSquare     string          `json:"enpassant_square,omitempty"`
+	OpponentInfo        PlayerInfo      `json:"opponent_info,omitempty"`
+	MyInfo              PlayerInfo      `json:"my_info,omitempty"`
+	MyTime              uint64          `json:"my_time,omitempty"`
+	OpponentTime        uint64          `json:"opponent_time,omitempty"`
+	MoveNotation        string          `json:"move_notation,omitempty"`
+	Moves               []MovesHistory  `json:"movesHistory,omitempty"`
+	PromoteTo           string          `json:"promote_to,omitempty"`
+	MyPointsDelta       float64         `json:"my_points_delta,omitempty"`
+	OpponentPointsDelta float64         `json:"opponent_points_delta,omitempty"`
+	IsDrawAvailable     bool            `json:"is_draw_available,omitempty"`
+	IsDrawOffered       bool            `json:"is_draw_offered,omitempty"`
+	IsRematchOffered    bool            `json:"is_rematch_offered,omitempty"`
+	IsRematchAvailable  bool            `json:"is_rematch_available,omitempty"`
+	IsNewGamePending    bool            `json:"is_new_game_pending,omitempty"`
 }
 
 type MovesHistory struct {
@@ -59,7 +60,7 @@ type MovesHistory struct {
 	MoveNotation string `json:"move_notation"`
 }
 
-func HandleConnection(playerID uint, w http.ResponseWriter, r *http.Request) {
+func HandleConnection(playerID uint, gameTypeID int, isEnqueue bool, w http.ResponseWriter, r *http.Request) {
 	ws, err := Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("upgrade failed for player %d: %v", playerID, err)
@@ -71,6 +72,26 @@ func HandleConnection(playerID uint, w http.ResponseWriter, r *http.Request) {
 	}()
 
 	RegisterConnection(playerID, ws)
+
+	var gameType models.GameType
+
+	if err := db.DB.Where("id = ?", gameTypeID).First(&gameType).Error; err != nil {
+
+		log.Println("Could not fetch the game type from the database.")
+		return
+	}
+
+	enqueueMessageType := "player_enqueued"
+
+	if !isEnqueue {
+		enqueueMessageType = "player_dequeued"
+	}
+
+	SendMessage(Message{
+		Type:         enqueueMessageType,
+		GameCategory: gameType.Name,
+	}, playerID, Sessions[playerID])
+
 	HandleSocketMessages(playerID, ws)
 }
 
@@ -311,7 +332,7 @@ func HandleReConnection(playerID uint, gameId int, w http.ResponseWriter, r *htt
 		}
 	}
 
-	SendMessage(ConnMessage{
+	SendMessage(Message{
 		Type: "opponent_connected",
 	}, opponentPlayerID, Sessions[opponentPlayerID])
 

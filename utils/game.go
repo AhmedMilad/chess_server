@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"os"
 	"slices"
 	"sort"
 	"strconv"
@@ -219,26 +220,36 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 }
 
 func mutualFit(p1, p2 Player) bool {
-	return p2.Rating >= p1.Rating-p1.LowerBoundRatingDiff &&
+
+	isDebug, err := strconv.ParseBool(os.Getenv("DEBUG"))
+
+	if err != nil {
+		log.Println("Could not parse debug env variable")
+		return false
+	}
+
+	return (p2.Rating >= p1.Rating-p1.LowerBoundRatingDiff &&
 		p2.Rating <= p1.Rating+p1.UpperBoundRatingDiff &&
 		p1.Rating >= p2.Rating-p2.LowerBoundRatingDiff &&
-		p1.Rating <= p2.Rating+p2.UpperBoundRatingDiff
+		p1.Rating <= p2.Rating+p2.UpperBoundRatingDiff) ||
+		isDebug
 }
 
-func EnqueuePlayer(userId uint, gameTypeId int) {
+func EnqueuePlayer(playerID uint, gameTypeID int) (bool, error) {
+
 	var user models.User
-	db.DB.Preload("Ratings.GameType").Preload("Setting").First(&user, userId)
+	db.DB.Preload("Ratings.GameType").Preload("Setting").First(&user, playerID)
 
 	var playerRating float64
 	for _, rating := range user.Ratings {
-		if rating.GameTypeID == uint(gameTypeId) {
+		if rating.GameTypeID == uint(gameTypeID) {
 			playerRating = float64(rating.Rating)
 		}
 	}
 
 	player := Player{
 		UserID:               user.ID,
-		GameTypeID:           uint(gameTypeId),
+		GameTypeID:           uint(gameTypeID),
 		Rating:               int(playerRating),
 		LowerBoundRatingDiff: int(user.Setting.LowerBoundPlayerRatingDiff),
 		UpperBoundRatingDiff: int(user.Setting.UpperBoundPlayerRatingDiff),
@@ -246,21 +257,34 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 
 	serialized, err := json.Marshal(player)
 	if err != nil {
-		fmt.Println("Error marshaling player:", err)
-		return
+		log.Println("Error marshaling player:", err)
+		return false, err
 	}
+
 	serializedStr := string(serialized)
-	key := GetQueueKey(user.ID, gameTypeId)
+	key := GetQueueKey(user.ID, gameTypeID)
 
 	exists, err := RDB.SIsMember(Ctx, "players_q_set", key).Result()
 	if err != nil {
-		fmt.Println("Error checking set:", err)
-		return
+		log.Println("Error checking set:", err)
+		return false, err
 	}
 
 	if exists {
-		fmt.Println("Player already in queue, skipping")
-		return
+		dequeuePlayer(key, serializedStr)
+		return false, err
+	}
+
+	var gameTypes []models.GameType
+
+	if err := db.DB.Find(&gameTypes).Error; err != nil {
+		log.Println("Could not fetch all game types from the database")
+		return false, err
+	}
+
+	for _, gt := range gameTypes {
+		curKey := GetQueueKey(user.ID, int(gt.ID))
+		dequeuePlayer(curKey, serializedStr)
 	}
 
 	pipe := RDB.TxPipeline()
@@ -268,11 +292,39 @@ func EnqueuePlayer(userId uint, gameTypeId int) {
 	pipe.RPush(Ctx, "players_q", serializedStr)
 	_, err = pipe.Exec(Ctx)
 	if err != nil {
-		fmt.Println("Error enqueuing player:", err)
-		return
+		log.Println("Error enqueuing player:", err)
+		return false, err
 	}
 
-	fmt.Println("Player enqueued")
+	log.Println("Player enqueued")
+	return true, nil
+}
+
+func dequeuePlayer(key, serializedStr string) error {
+	exists, err := RDB.SIsMember(Ctx, "players_q_set", key).Result()
+	if err != nil {
+		log.Println("Error checking set:", err)
+		return err
+	}
+
+	if exists {
+		_, err = RDB.SRem(Ctx, "players_q_set", key).Result()
+		if err != nil {
+			log.Println("Error removing player from set:", err)
+			return err
+		}
+
+		_, err = RDB.LRem(Ctx, "players_q", 0, serializedStr).Result()
+		if err != nil {
+			log.Println("Error removing player from queue:", err)
+			return err
+		}
+
+		log.Println("Player dequeued")
+		return err
+	}
+
+	return nil
 }
 
 func DequeuePlayer(userId uint, gameTypeId int) error {

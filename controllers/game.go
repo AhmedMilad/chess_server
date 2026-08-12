@@ -59,8 +59,10 @@ func PlayGame(c *gin.Context) {
 		c.Abort()
 		return
 	}
+
 	var user models.User
 	result := db.DB.First(&user, claims["id"])
+
 	if result.Error != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		c.Abort()
@@ -68,9 +70,14 @@ func PlayGame(c *gin.Context) {
 	}
 
 	gameTypeId, _ := strconv.Atoi(c.Param("id"))
-	utils.EnqueuePlayer(user.ID, gameTypeId)
+	isEnqueue, err := utils.EnqueuePlayer(user.ID, gameTypeId)
 
-	utils.HandleConnection(user.ID, c.Writer, c.Request)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Someting went wrong please try again later."})
+		return
+	}
+
+	utils.HandleConnection(user.ID, gameTypeId, isEnqueue, c.Writer, c.Request)
 }
 
 func ReConnect(c *gin.Context) {
