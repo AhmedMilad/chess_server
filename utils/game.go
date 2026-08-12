@@ -191,28 +191,44 @@ func createGame(p1, p2 Player, gameTypeID uint) {
 	player1WS, ok := Sessions[p1.UserID]
 	PlayerMutex.Unlock()
 
-	if ok {
-		if err := player1WS.Conn.WriteMessage(websocket.TextMessage, []byte(player1Data)); err != nil {
-			PlayerMutex.Lock()
-			Sessions[p1.UserID].Conn.Close()
-			delete(Sessions, p1.UserID)
-			PlayerMutex.Unlock()
-		}
+	if ok && player1WS.Conn != nil {
+		if err := player1WS.Conn.WriteMessage(
+			websocket.TextMessage,
+			[]byte(player1Data),
+		); err != nil {
 
+			PlayerMutex.Lock()
+
+			if current, exists := Sessions[p1.UserID]; exists && current == player1WS {
+				delete(Sessions, p1.UserID)
+			}
+
+			PlayerMutex.Unlock()
+
+			player1WS.Conn.Close()
+		}
 	}
 
 	PlayerMutex.Lock()
 	player2WS, ok := Sessions[p2.UserID]
 	PlayerMutex.Unlock()
 
-	if ok {
-		if err := player2WS.Conn.WriteMessage(websocket.TextMessage, []byte(player2Data)); err != nil {
-			PlayerMutex.Lock()
-			Sessions[p2.UserID].Conn.Close()
-			delete(Sessions, p2.UserID)
-			PlayerMutex.Unlock()
-		}
+	if ok && player2WS.Conn != nil {
+		if err := player2WS.Conn.WriteMessage(
+			websocket.TextMessage,
+			[]byte(player2Data),
+		); err != nil {
 
+			PlayerMutex.Lock()
+
+			if current, exists := Sessions[p2.UserID]; exists && current.Conn == player2WS.Conn {
+				delete(Sessions, p2.UserID)
+			}
+
+			PlayerMutex.Unlock()
+
+			player2WS.Conn.Close()
+		}
 	}
 
 	fmt.Printf("Game created: %d vs %d\n", p1.UserID, p2.UserID)

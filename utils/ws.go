@@ -345,6 +345,31 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 		_, msg, err := ws.ReadMessage()
 
 		if err != nil {
+
+			var gameTypes []models.GameType
+
+			if err := db.DB.Find(&gameTypes).Error; err != nil {
+				log.Println("Could not fetch all game types from the database")
+				break
+			}
+
+			for _, gt := range gameTypes {
+
+				cp := Player{
+					UserID:     playerID,
+					GameTypeID: uint(gt.ID),
+				}
+
+				curSerial, err := json.Marshal(cp)
+				if err != nil {
+					log.Println("Error marshaling player:", err)
+					break
+				}
+
+				curKey := GetQueueKey(playerID, int(gt.ID))
+				dequeuePlayer(curKey, string(curSerial))
+			}
+
 			log.Printf("player %d read error: %v", playerID, err)
 
 			PlayerMutex.Lock()
@@ -352,6 +377,7 @@ func HandleSocketMessages(playerID uint, ws *websocket.Conn) {
 				s.Conn = nil
 				Sessions[playerID] = s
 			}
+
 			PlayerMutex.Unlock()
 
 			break
