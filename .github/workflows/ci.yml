@@ -45,4 +45,4 @@ jobs:
         run: go mod download
 
       - name: Run Tests
-        run: go test -v ./tests/piece_move_test.go
+        run: go test -v ./..
