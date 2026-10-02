@@ -24,13 +24,20 @@ jobs:
         ports:
           - 5432:5432
 
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: chess
+      DB_PASSWORD: chess
+      DB_NAME: chess_test
+      DB_SSLMODE: disable
+
     steps:
-      - name: System Runner
+      - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v7
-
         with:
           go-version: "1.25"
 
